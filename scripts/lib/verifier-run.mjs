@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
+import { join } from "node:path";
 
 let activeVerifierRun;
 
@@ -34,13 +35,52 @@ export const completeVerifierRun = async (run) => {
 };
 
 const observeVerifierLineage = async (run, observedAt) => {
-  if (process.platform === "win32")
-    return unavailableLineage(
-      run,
-      observedAt,
-      null,
-      "Windows verifier lineage ownership is unavailable without Job Objects",
-    );
+  if (process.platform === "win32") {
+    const jobName = process.env.REA_WINDOWS_VERIFIER_JOB_NAME?.trim();
+    if (!jobName)
+      return unavailableLineage(
+        run,
+        observedAt,
+        null,
+        "Windows verifier was not launched inside its dedicated Job Object",
+      );
+    try {
+      const { members, observerPid } = await windowsJobSnapshot(jobName);
+      const launcher = members.find(({ pid }) => pid === run.verifier_pid);
+      if (launcher === undefined)
+        return unavailableLineage(
+          run,
+          observedAt,
+          null,
+          "verifier launcher is not a member of its dedicated Windows Job Object",
+        );
+      const descendants = members.filter(
+        ({ pid }) => pid !== run.verifier_pid && pid !== observerPid,
+      );
+      return {
+        status: "verified",
+        observed_at: observedAt,
+        launcher_pid: run.verifier_pid,
+        launcher_parent_pid: run.parent_pid,
+        process_group_id: null,
+        ownership: "windows-job-object",
+        descendants: descendants
+          .map(({ pid, parentPid }) => ({
+            pid,
+            parent_pid: parentPid,
+            process_group_id: null,
+          }))
+          .sort((left, right) => left.pid - right.pid),
+      };
+    } catch (cause) {
+      return unavailableLineage(
+        run,
+        observedAt,
+        null,
+        `Windows Job Object membership could not be verified: ${cause instanceof Error ? cause.message : String(cause)}`,
+      );
+    }
+  }
   try {
     const { members, observerPid } = await processSnapshot();
     const launcher = members.find(({ pid }) => pid === run.verifier_pid);
@@ -114,6 +154,49 @@ const unavailableLineage = (run, observedAt, processGroupId, reason) => ({
   process_group_id: processGroupId,
   reason,
 });
+
+const windowsJobSnapshot = async (jobName) => {
+  const helperPath =
+    process.env.REA_WINDOWS_AUTHORITY_PATH?.trim() ||
+    join(process.cwd(), "dist", "native", "windows", "rea_windows_authority.exe");
+  const child = spawn(helperPath, ["list-job-pids", "--job-name", jobName], {
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  const stdout = [];
+  const stderr = [];
+  child.stdout.on("data", (chunk) => stdout.push(chunk));
+  child.stderr.on("data", (chunk) => stderr.push(chunk));
+  const code = await new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", resolve);
+  });
+  if (code !== 0)
+    throw new Error(
+      Buffer.concat(stderr).toString("utf8") ||
+        `native helper exited with code ${String(code)}`,
+    );
+  const report = JSON.parse(Buffer.concat(stdout).toString("utf8"));
+  if (
+    report?.ok !== true ||
+    report?.operation !== "list-job-pids" ||
+    !Array.isArray(report.processes)
+  )
+    throw new Error("native helper returned an invalid Job Object membership report");
+  const members = report.processes.map((member) => {
+    if (
+      !Number.isSafeInteger(member?.pid) ||
+      !Number.isSafeInteger(member?.parent_pid)
+    )
+      throw new Error("native helper returned an invalid process identity");
+    return {
+      pid: member.pid,
+      parentPid: member.parent_pid,
+      processGroupId: null,
+    };
+  });
+  return { members, observerPid: child.pid ?? null };
+};
 
 const processSnapshot = async () => {
   if (process.platform === "linux") return linuxProcessSnapshot();
