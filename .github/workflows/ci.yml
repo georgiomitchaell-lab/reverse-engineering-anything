@@ -354,6 +354,23 @@ jobs:
           path: windows-capabilities.json
           retention-days: 30
 
+  windows-full-test:
+    name: Windows full test suite
+    needs: changes
+    if: github.event_name == 'push' || needs.changes.outputs.code == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # Builds the packaged native authority after dist cleanup, exports its
+      # path to Vitest, and then runs the full suite on the native Windows host.
+      - run: npm test
+
   docs:
     name: Docs Generation
     if: github.event_name == 'pull_request'
