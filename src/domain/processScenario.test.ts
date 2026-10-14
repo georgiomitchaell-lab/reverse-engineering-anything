@@ -235,3 +235,24 @@ describe("process scenario large interaction inputs", () => {
     );
   });
 });
+
+describe("process scenario absolute paths on Windows", () => {
+  it("accepts absolute Windows paths", () => {
+    const result = processScenarioSchema.safeParse({
+      executable: "C:\\Windows\\System32\\cmd.exe",
+      working_directory: "C:\\Windows",
+      filesystem_roots: ["C:\\Users\\Public"],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects relative executable paths", () => {
+    expect(
+      processScenarioSchema.safeParse({
+        executable: "cmd.exe",
+        working_directory: "/tmp",
+        filesystem_roots: [],
+      }).success,
+    ).toBe(false);
+  });
+});
