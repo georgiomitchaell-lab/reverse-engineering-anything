@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { isPathWithinRoot } from "./localPath.js";
 import canonicalize from "canonicalize";
+import { isAbsolute, win32 } from "node:path";
 import { z } from "zod";
 import {
   processReactiveScenarioSchema,
@@ -11,6 +12,13 @@ import { replayMachineSchema } from "./replayMachine.js";
 const positiveBudget = z.number().int().safe().positive();
 const timedEventBase = { at_ms: z.number().int().safe().nonnegative() };
 const environmentName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/u);
+const absolutePath = z
+  .string()
+  .refine(
+    (value) =>
+      value.startsWith("/") || isAbsolute(value) || win32.isAbsolute(value),
+    "Path must be absolute",
+  );
 const reservedEnvironment = new Set([
   "HOME",
   "TERM",
@@ -114,14 +122,14 @@ export const processComparisonContract = (
  */
 export const processScenarioSchema = z
   .object({
-    executable: z.string().startsWith("/"),
+    executable: absolutePath,
     arguments: z.array(z.string()).default([]),
-    working_directory: z.string().startsWith("/"),
+    working_directory: absolutePath,
     environment: z.record(environmentName, z.string()).default({}),
     inherit_environment: z.array(environmentName).default([]),
     secret_aliases: z.array(environmentName).default([]),
     network_access: z.literal("host").default("host"),
-    filesystem_roots: z.array(z.string().startsWith("/")).default([]),
+    filesystem_roots: z.array(absolutePath).default([]),
     terminal: z
       .object({
         columns: z.number().int().min(1).max(65_535).default(80),

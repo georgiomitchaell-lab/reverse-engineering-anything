@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 
 import { processScenarioSchema } from "./processScenario.js";
 
@@ -233,5 +233,26 @@ describe("process scenario large interaction inputs", () => {
     expect(scenario.replay.websocket_connections[0]?.messages).toHaveLength(
       101,
     );
+  });
+});
+
+describe("process scenario absolute paths on Windows", () => {
+  it("accepts absolute Windows paths", () => {
+    const result = processScenarioSchema.safeParse({
+      executable: "C:\\Windows\\System32\\cmd.exe",
+      working_directory: "C:\\Windows",
+      filesystem_roots: ["C:\\Users\\Public"],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects relative executable paths", () => {
+    expect(
+      processScenarioSchema.safeParse({
+        executable: "cmd.exe",
+        working_directory: "/tmp",
+        filesystem_roots: [],
+      }).success,
+    ).toBe(false);
   });
 });
