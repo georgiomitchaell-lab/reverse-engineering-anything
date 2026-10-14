@@ -140,7 +140,7 @@
     "verify:fixtures": "npm run build:fixtures && node scripts/verify-conformance-fixtures.mjs",
     "verify:readiness": "npm run build:cached && npm run verify:fixtures && node scripts/verify-reconstruction-readiness.mjs",
     "verify:package": "npm run build:cached && node scripts/verify-package.mjs",
-    "verify:package:windows": "npm run build:cached && node scripts/verify-windows-package.mjs",
+    "verify:package:windows": "npm run build:cached && npm run build:windows-native && node scripts/verify-windows-package.mjs",
     "probe:windows-capabilities": "npm run build:cached && node scripts/windows-capabilities.mjs",
     "verify:published": "node scripts/verify-published-package.mjs",
     "config:print": "node scripts/print-mcp-config.mjs",
