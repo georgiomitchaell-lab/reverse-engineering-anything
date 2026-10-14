@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <iostream>
+#include <cstdlib>
 
 #pragma comment(lib, "advapi32.lib")
 
@@ -113,7 +114,7 @@ static int runInJob(int argc, wchar_t** argv) {
     return 2;
   }
   wchar_t* pidEnd = nullptr;
-  unsigned long parentPid = wcstoul(argv[3], &pidEnd, 10);
+  unsigned long parentPid = std::wcstoul(argv[3], &pidEnd, 10);
   if (parentPid == 0 || pidEnd == argv[3] || *pidEnd != L'\0')
     return fail(L"invalid_parent_pid", ERROR_INVALID_PARAMETER);
   HANDLE parentProcess = OpenProcess(SYNCHRONIZE, FALSE, parentPid);
