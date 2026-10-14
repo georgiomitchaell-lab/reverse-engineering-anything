@@ -109,6 +109,9 @@ try {
     ...process.env,
     REA_ANALYSIS_PROVIDER: "auto",
   };
+  // Exercise packaged helper discovery instead of accidentally relying on the
+  // developer's REA_WINDOWS_AUTHORITY_PATH override.
+  delete environment.REA_WINDOWS_AUTHORITY_PATH;
   const help = await exec(process.execPath, [entry, "--help"], {
     env: environment,
     windowsHide: true,
