@@ -89,10 +89,47 @@ jobs:
           gh auth setup-git
           git push origin "HEAD:${release_pr_branch}"
 
+  create-release-tag:
+    name: Create requested 4.0.0 release tag
+    if: contains(github.event.head_commit.message, '[publish-rea-agents-4.0.0]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Create release tag and GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          version="$(node --input-type=module -e 'import packageJson from "./package.json" with { type: "json" }; process.stdout.write(packageJson.version)')"
+          if [ "$version" != "4.0.0" ]; then
+            echo "Refusing to publish unexpected package version: $version" >&2
+            exit 1
+          fi
+          tag="rea-agents-$version"
+          git fetch --tags
+          if ! git rev-parse --verify "refs/tags/$tag" >/dev/null 2>&1; then
+            git tag -a "$tag" "$GITHUB_SHA" -m "rea-agents $version"
+            git push origin "refs/tags/$tag"
+          fi
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --target "$GITHUB_SHA" --title "rea-agents $version" --notes "Release rea-agents $version."
+          fi
+
   publish:
     name: Publish to npm
-    needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    needs: [release-please, create-release-tag]
+    if: >-
+      always() &&
+      (
+        needs.release-please.outputs.release_created == 'true' ||
+        contains(github.event.head_commit.message, '[publish-rea-agents-4.0.0]')
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -150,8 +187,14 @@ jobs:
 
   publish-mcp:
     name: Publish to MCP Registry
-    needs: [release-please, publish]
-    if: needs.release-please.outputs.release_created == 'true' && needs.publish.result == 'success'
+    needs: [release-please, publish, create-release-tag]
+    if: >-
+      always() &&
+      needs.publish.result == 'success' &&
+      (
+        needs.release-please.outputs.release_created == 'true' ||
+        contains(github.event.head_commit.message, '[publish-rea-agents-4.0.0]')
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -159,7 +202,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          ref: ${{ needs.release-please.outputs.release_created == 'true' && needs.release-please.outputs.tag_name || 'rea-agents-4.0.0' }}
           persist-credentials: false
 
       - name: Verify package and registry metadata versions
