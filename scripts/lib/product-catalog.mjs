@@ -67,4 +67,4 @@ export const createProductCatalog = async (root) => {
 
 /** Stable checked-in representation of the product catalog. */
 export const serializeProductCatalog = (catalog) =>
-  format(JSON.stringify(catalog, null, 2), { parser: "json" });
+  format(JSON.stringify(catalog), { parser: "json" });
