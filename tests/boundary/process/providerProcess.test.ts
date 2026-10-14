@@ -55,7 +55,13 @@ describe("provider process runtime and wait primitives", () => {
       parent: tmpdir(),
       prefix: "rea-provider-test-",
     });
-    expect((await stat(runtime.path)).mode & 0o777).toBe(0o700);
+    if (process.platform === "win32") {
+      // Windows privacy is proven by the native helper's protected DACL,
+      // not by Node's POSIX-compatible stat mode bits.
+      expect((await stat(runtime.path)).isDirectory()).toBe(true);
+    } else {
+      expect((await stat(runtime.path)).mode & 0o777).toBe(0o700);
+    }
 
     const first = runtime.close();
     const second = runtime.close();
