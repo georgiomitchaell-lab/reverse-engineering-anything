@@ -47,6 +47,7 @@ try {
     "bridge/ghidra/ReaGhidraBridge.java",
     "dist/main.js",
     "dist/cli.js",
+    "dist/native/windows/rea_windows_authority.exe",
     "scripts/rea.mjs",
   ])
     if (!packagedPaths.has(required))
@@ -58,13 +59,50 @@ try {
     ["install", "--no-package-lock", "--no-save", "--prefix", prefix, tarball],
     workspace,
   );
-  const entry = join(
-    prefix,
-    "node_modules",
-    "rea-agents",
-    "scripts",
-    "rea.mjs",
+  const installedRoot = join(prefix, "node_modules", "rea-agents");
+  const entry = join(installedRoot, "scripts", "rea.mjs");
+  const nativeHelper = join(
+    installedRoot,
+    "dist",
+    "native",
+    "windows",
+    "rea_windows_authority.exe",
   );
+
+  // Verify the installed artifact, not just the source-tree helper. The DACL
+  // operation must return its native verification marker before the package
+  // can claim private-runtime ACL support.
+  const privateProbe = join(workspace, "private-runtime-dacl-probe");
+  const daclProbe = await exec(
+    nativeHelper,
+    ["create-private-dir", privateProbe],
+    { windowsHide: true },
+  );
+  const daclResult = JSON.parse(daclProbe.stdout);
+  if (
+    daclResult?.ok !== true ||
+    daclResult?.operation !== "create-private-dir" ||
+    daclResult?.dacl !== "verified-protected"
+  )
+    throw new Error("Packaged native helper did not verify the private runtime DACL");
+
+  // The provider's stdout is a protocol stream. The native supervisor must
+  // not append helper status JSON to the child output.
+  const jobProbe = await exec(
+    nativeHelper,
+    [
+      "run-job",
+      "--",
+      process.env.ComSpec ?? "cmd.exe",
+      "/d",
+      "/c",
+      "echo REA_JOB_STDOUT_OK",
+    ],
+    { windowsHide: true },
+  );
+  if (jobProbe.stdout.trim() !== "REA_JOB_STDOUT_OK")
+    throw new Error("Packaged Job Object helper contaminated or lost provider stdout");
+
   const environment = {
     ...process.env,
     REA_ANALYSIS_PROVIDER: "auto",
