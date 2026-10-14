@@ -5,6 +5,7 @@ import type {
   OwnedProcessGroup,
   ProcessCleanupResult,
 } from "./ProcessOwnership.js";
+import { resolveWindowsNativeHelperPath } from "./WindowsNativeHelper.js";
 
 const DEFAULT_TERMINATION_GRACE_MS = 250;
 const DEFAULT_KILL_GRACE_MS = 1_000;
@@ -111,7 +112,7 @@ export const spawnOwnedProviderProcess = async (
   // a Job Object, then resumes it; killing the helper closes the job handle.
   // Never silently claim Job Object ownership when the helper is not configured.
   const nativeAuthorityPath =
-    process.platform === "win32" ? process.env.REA_WINDOWS_AUTHORITY_PATH : undefined;
+    process.platform === "win32" ? resolveWindowsNativeHelperPath() : undefined;
   const useWindowsJob =
     typeof nativeAuthorityPath === "string" && nativeAuthorityPath.trim().length > 0;
   const launchCommand = useWindowsJob ? nativeAuthorityPath! : options.command;
