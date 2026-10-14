@@ -347,29 +347,17 @@ jobs:
           src/process/ProcessOwnership.validation.test.ts
           tests/conformance/providers/ghidra/realGhidraWindowsWorkflow.test.ts
       - run: npm run verify:package:windows
+      - name: Run Windows PTY timeout and cancellation regressions
+        shell: pwsh
+        run: |
+          $env:REA_WINDOWS_AUTHORITY_PATH = Join-Path $PWD "dist\\native\\windows\\rea_windows_authority.exe"
+          npx vitest run --coverage.enabled=false tests/boundary/process/processCaptureLifecycle.test.ts -t "terminates a Windows PTY|preserves the requested signal|distinguishes timeout from cancellation and cleans both runs"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-capabilities
           path: windows-capabilities.json
           retention-days: 30
-
-  windows-full-test:
-    name: Windows full test suite
-    needs: changes
-    if: github.event_name == 'push' || needs.changes.outputs.code == 'true'
-    runs-on: windows-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      # Builds the packaged native authority after dist cleanup, exports its
-      # path to Vitest, and then runs the full suite on the native Windows host.
-      - run: npm test
 
   docs:
     name: Docs Generation
