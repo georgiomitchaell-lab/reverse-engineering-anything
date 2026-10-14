@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 
-import { execFile } from "node:child_process";
-import { access, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { execFile, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { access, copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { Client } from "@modelcontextprotocol/client";
@@ -13,8 +15,60 @@ import { verifyCompleteToolCatalog } from "./lib/verify-package-core.mjs";
 import { completeVerifierRun, createVerifierRun } from "./lib/verifier-run.mjs";
 
 const exec = promisify(execFile);
-const verifierRun = createVerifierRun();
 const root = process.cwd();
+
+// The verifier itself must be placed in a dedicated native Job Object before
+// it starts any work, so every descendant can be attested by job membership.
+if (
+  process.platform === "win32" &&
+  process.env.REA_WINDOWS_VERIFIER_JOB_NAME === undefined
+) {
+  const launcherDirectory = await mkdtemp(
+    join(tmpdir(), "rea-windows-verifier-launcher-"),
+  );
+  const helper = join(launcherDirectory, "rea_windows_authority.exe");
+  await copyFile(
+    join(root, "dist", "native", "windows", "rea_windows_authority.exe"),
+    helper,
+  );
+  const jobName = `Local\\REA-Verifier-${randomUUID()}`;
+  const child = spawn(
+    helper,
+    [
+      "run-job-named",
+      "--parent-pid",
+      String(process.pid),
+      "--job-name",
+      jobName,
+      "--",
+      process.execPath,
+      fileURLToPath(import.meta.url),
+    ],
+    {
+      env: { ...process.env, REA_WINDOWS_VERIFIER_JOB_NAME: jobName },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    },
+  );
+  const stdout = [];
+  const stderr = [];
+  child.stdout.on("data", (chunk) => stdout.push(chunk));
+  child.stderr.on("data", (chunk) => stderr.push(chunk));
+  const code = await new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", resolve);
+  });
+  await new Promise((resolve) =>
+    process.stdout.write(Buffer.concat(stdout), resolve),
+  );
+  await new Promise((resolve) =>
+    process.stderr.write(Buffer.concat(stderr), resolve),
+  );
+  await rm(launcherDirectory, { recursive: true, force: true });
+  process.exit(code ?? 1);
+}
+
+const verifierRun = createVerifierRun();
 const workspace = await mkdtemp(join(tmpdir(), "rea-windows-package-"));
 const prefix = join(workspace, "prefix");
 
@@ -195,9 +249,18 @@ try {
     await client.close();
   }
 
+  const verifierReport = await completeVerifierRun(verifierRun);
+  if (
+    process.platform === "win32" &&
+    verifierReport.process_lineage.status !== "verified"
+  ) {
+    throw new Error(
+      `Windows process ownership was not verified: ${verifierReport.process_lineage.reason ?? "native Job Object membership unavailable"}`,
+    );
+  }
   process.stdout.write(
     `${JSON.stringify({
-      verifier_run: await completeVerifierRun(verifierRun),
+      verifier_run: verifierReport,
       ok: true,
       platform: process.platform,
       package: packageResult.filename,

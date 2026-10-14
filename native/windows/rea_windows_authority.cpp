@@ -6,7 +6,10 @@
 #include <sddl.h>
 #include <string>
 #include <vector>
+#include <utility>
 #include <iostream>
+#include <tlhelp32.h>
+#include <cstddef>
 #include <cstdlib>
 
 #pragma comment(lib, "advapi32.lib")
@@ -254,11 +257,18 @@ static int createPrivateDir(const wchar_t* inputPath) {
 }
 
 static int runInJob(int argc, wchar_t** argv) {
-  if (argc < 6 || wcscmp(argv[2], L"--parent-pid") != 0 ||
-      wcscmp(argv[4], L"--") != 0) {
-    std::wcerr << L"Usage: rea_windows_authority.exe run-job --parent-pid <pid> -- <exe> [args...]\n";
+  const bool named = wcscmp(argv[1], L"run-job-named") == 0;
+  const int separatorIndex = named ? 6 : 4;
+  const int executableIndex = separatorIndex + 1;
+  if ((!named && argc < 6) || (named && argc < 9) ||
+      wcscmp(argv[2], L"--parent-pid") != 0 ||
+      (named && wcscmp(argv[4], L"--job-name") != 0) ||
+      wcscmp(argv[separatorIndex], L"--") != 0) {
+    std::wcerr << L"Usage: rea_windows_authority.exe run-job --parent-pid <pid> -- <exe> [args...]\n"
+               << L"   or: rea_windows_authority.exe run-job-named --parent-pid <pid> --job-name <name> -- <exe> [args...]\n";
     return 2;
   }
+  const std::wstring jobName = named ? argv[5] : L"";
   wchar_t* pidEnd = nullptr;
   unsigned long parentPid = std::wcstoul(argv[3], &pidEnd, 10);
   if (parentPid == 0 || pidEnd == argv[3] || *pidEnd != L'\0')
@@ -267,16 +277,22 @@ static int runInJob(int argc, wchar_t** argv) {
   if (!parentProcess) return fail(L"open_parent_process");
 
   std::wstring command;
-  for (int i = 5; i < argc; ++i) {
+  for (int i = executableIndex; i < argc; ++i) {
     if (!command.empty()) command.push_back(L' ');
     command += quoteArg(argv[i]);
   }
 
-  HANDLE job = CreateJobObjectW(nullptr, nullptr);
+  SetLastError(ERROR_SUCCESS);
+  HANDLE job = CreateJobObjectW(nullptr, named ? jobName.c_str() : nullptr);
+  const DWORD createJobError = GetLastError();
   if (!job) {
-    DWORD e = GetLastError();
     CloseHandle(parentProcess);
-    return fail(L"create_job", e);
+    return fail(L"create_job", createJobError);
+  }
+  if (named && createJobError == ERROR_ALREADY_EXISTS) {
+    CloseHandle(job);
+    CloseHandle(parentProcess);
+    return fail(L"job_name_collision", ERROR_ALREADY_EXISTS);
   }
   JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
   limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
@@ -298,7 +314,7 @@ static int runInJob(int argc, wchar_t** argv) {
   mutableCommand.push_back(L'\0');
 
   // Crucial ordering: create suspended -> assign to Job Object -> resume.
-  if (!CreateProcessW(argv[5], mutableCommand.data(), nullptr, nullptr, TRUE,
+  if (!CreateProcessW(argv[executableIndex], mutableCommand.data(), nullptr, nullptr, TRUE,
       CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT, nullptr, nullptr, &si, &pi)) {
     DWORD e = GetLastError();
     CloseHandle(job); CloseHandle(parentProcess);
@@ -351,12 +367,85 @@ static int runInJob(int argc, wchar_t** argv) {
   return static_cast<int>(exitCode);
 }
 
+static int listJobPids(const wchar_t* jobName) {
+  HANDLE job = OpenJobObjectW(JOB_OBJECT_QUERY, FALSE, jobName);
+  if (!job) return fail(L"open_job_for_query");
+
+  size_t capacity = 64;
+  std::vector<BYTE> buffer;
+  JOBOBJECT_BASIC_PROCESS_ID_LIST* processList = nullptr;
+  for (;;) {
+    const size_t bytes = sizeof(JOBOBJECT_BASIC_PROCESS_ID_LIST) +
+      (capacity - 1) * sizeof(ULONG_PTR);
+    buffer.assign(bytes, 0);
+    processList = reinterpret_cast<JOBOBJECT_BASIC_PROCESS_ID_LIST*>(buffer.data());
+    processList->NumberOfProcessIdsInList = static_cast<DWORD>(capacity);
+    if (QueryInformationJobObject(job, JobObjectBasicProcessIdList,
+        processList, static_cast<DWORD>(buffer.size()), nullptr)) break;
+    const DWORD e = GetLastError();
+    if (e != ERROR_MORE_DATA || capacity >= 65536) {
+      CloseHandle(job);
+      return fail(L"query_job_process_ids", e);
+    }
+    capacity *= 2;
+  }
+
+  HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  if (snapshot == INVALID_HANDLE_VALUE) {
+    DWORD e = GetLastError();
+    CloseHandle(job);
+    return fail(L"snapshot_process_parents", e);
+  }
+  std::vector<std::pair<DWORD, DWORD>> parents;
+  PROCESSENTRY32W entry{};
+  entry.dwSize = sizeof(entry);
+  if (Process32FirstW(snapshot, &entry)) {
+    do {
+      parents.emplace_back(entry.th32ProcessID, entry.th32ParentProcessID);
+    } while (Process32NextW(snapshot, &entry));
+  } else {
+    DWORD e = GetLastError();
+    CloseHandle(snapshot);
+    CloseHandle(job);
+    return fail(L"enumerate_process_parents", e);
+  }
+
+  std::wcout << L"{\"ok\":true,\"operation\":\"list-job-pids\",\"processes\":[";
+  bool first = true;
+  const DWORD count = processList->NumberOfProcessIdsInList;
+  for (DWORD i = 0; i < count; ++i) {
+    const DWORD pid = static_cast<DWORD>(processList->ProcessIdList[i]);
+    DWORD parentPid = 0;
+    for (const auto& candidate : parents) {
+      if (candidate.first == pid) {
+        parentPid = candidate.second;
+        break;
+      }
+    }
+    if (!first) std::wcout << L",";
+    first = false;
+    std::wcout << L"{\"pid\":" << pid << L",\"parent_pid\":" << parentPid << L"}";
+  }
+  std::wcout << L"]}\n";
+  CloseHandle(snapshot);
+  CloseHandle(job);
+  return 0;
+}
+
+
 int wmain(int argc, wchar_t** argv) {
   if (argc == 3 && wcscmp(argv[1], L"create-private-dir") == 0)
     return createPrivateDir(argv[2]);
-  if (argc >= 4 && wcscmp(argv[1], L"run-job") == 0)
+
+  if (argc == 4 && wcscmp(argv[1], L"list-job-pids") == 0 &&
+      wcscmp(argv[2], L"--job-name") == 0)
+    return listJobPids(argv[3]);
+  if (argc >= 4 && (wcscmp(argv[1], L"run-job") == 0 ||
+      wcscmp(argv[1], L"run-job-named") == 0))
     return runInJob(argc, argv);
   std::wcerr << L"Usage:\n  rea_windows_authority.exe create-private-dir <new-directory>\n"
-             << L"  rea_windows_authority.exe run-job --parent-pid <pid> -- <exe> [args...]\n";
+             << L"  rea_windows_authority.exe run-job --parent-pid <pid> -- <exe> [args...]\n"
+             << L"  rea_windows_authority.exe run-job-named --parent-pid <pid> --job-name <name> -- <exe> [args...]\n"
+             << L"  rea_windows_authority.exe list-job-pids --job-name <name>\n";
   return 2;
 }

@@ -7,6 +7,10 @@ on:
       - "scripts/build-windows-authority.mjs"
       - "scripts/verify-windows-package.mjs"
       - "src/process/WindowsAuthority.ts"
+      - "src/process/WindowsNativeHelper.ts"
+      - "src/process/ProviderProcess.ts"
+      - "src/process/ProcessOwnership.ts"
+      - "src/application/WindowsCapabilities.ts"
       - "src/process/PrivateRuntimeRoot.ts"
       - "package.json"
       - "package-lock.json"
@@ -15,6 +19,7 @@ on:
     branches:
       - main
       - fix/windows-native-authority
+      - fix/release-docs-package-validation
     paths:
       - "native/windows/**"
       - "scripts/build-windows-authority.mjs"
