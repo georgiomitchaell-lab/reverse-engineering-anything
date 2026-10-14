@@ -2,7 +2,15 @@
 
 import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { access, copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
+import {
+  access,
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -213,6 +221,43 @@ try {
   if (jobProbe.stdout.trim() !== "REA_JOB_STDOUT_OK") {
     throw new Error(
       "Packaged Job Object helper contaminated or lost provider stdout",
+    );
+  }
+
+  // Match Ghidra's cmd.exe /s /c launch shape with paths containing spaces.
+  // A CRT-escaped command string is not equivalent to cmd.exe's own quoting.
+  const batchDirectory = join(workspace, "batch fixture space");
+  await mkdir(batchDirectory);
+  const batchScript = join(batchDirectory, "capture launch.cmd");
+  const batchCapture = join(batchDirectory, "launch capture.txt");
+  await writeFile(
+    batchScript,
+    `@echo off\r\n> "${batchCapture}" echo REA_BATCH_JOB_OK\r\n`,
+    "utf8",
+  );
+  const batchInvocation = `""${batchScript}""`;
+  await exec(
+    nativeHelper,
+    [
+      "run-job",
+      "--parent-pid",
+      String(process.pid),
+      "--",
+      "--windows-verbatim-arguments",
+      process.env.ComSpec ?? "cmd.exe",
+      "/d",
+      "/e:on",
+      "/v:off",
+      "/s",
+      "/c",
+      batchInvocation,
+    ],
+    { windowsHide: true },
+  );
+  const capturedBatchOutput = (await readFile(batchCapture, "utf8")).trim();
+  if (capturedBatchOutput !== "REA_BATCH_JOB_OK") {
+    throw new Error(
+      "Packaged Job Object helper corrupted cmd.exe verbatim argument quoting",
     );
   }
 

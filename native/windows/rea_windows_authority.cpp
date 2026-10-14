@@ -259,13 +259,21 @@ static int createPrivateDir(const wchar_t* inputPath) {
 static int runInJob(int argc, wchar_t** argv) {
   const bool named = wcscmp(argv[1], L"run-job-named") == 0;
   const int separatorIndex = named ? 6 : 4;
-  const int executableIndex = separatorIndex + 1;
+  const int firstCommandIndex = separatorIndex + 1;
   if ((!named && argc < 6) || (named && argc < 9) ||
       wcscmp(argv[2], L"--parent-pid") != 0 ||
       (named && wcscmp(argv[4], L"--job-name") != 0) ||
       wcscmp(argv[separatorIndex], L"--") != 0) {
-    std::wcerr << L"Usage: rea_windows_authority.exe run-job --parent-pid <pid> -- <exe> [args...]\n"
+    std::wcerr << L"Usage: rea_windows_authority.exe run-job --parent-pid <pid> -- [--windows-verbatim-arguments] <exe> [args...]\n"
                << L"   or: rea_windows_authority.exe run-job-named --parent-pid <pid> --job-name <name> -- <exe> [args...]\n";
+    return 2;
+  }
+  const bool verbatimArguments =
+      argc > firstCommandIndex &&
+      wcscmp(argv[firstCommandIndex], L"--windows-verbatim-arguments") == 0;
+  const int executableIndex = firstCommandIndex + (verbatimArguments ? 1 : 0);
+  if (executableIndex >= argc) {
+    std::wcerr << L"Missing executable after run-job options\n";
     return 2;
   }
   const std::wstring jobName = named ? argv[5] : L"";
@@ -276,10 +284,13 @@ static int runInJob(int argc, wchar_t** argv) {
   HANDLE parentProcess = OpenProcess(SYNCHRONIZE, FALSE, parentPid);
   if (!parentProcess) return fail(L"open_parent_process");
 
-  std::wstring command;
-  for (int i = executableIndex; i < argc; ++i) {
-    if (!command.empty()) command.push_back(L' ');
-    command += quoteArg(argv[i]);
+  // Windows batch invocations already contain cmd.exe-specific quoting. Keep
+  // the executable quoted for CreateProcessW, but do not CRT-escape the argv
+  // string when the caller explicitly requested verbatim Windows arguments.
+  std::wstring command = quoteArg(argv[executableIndex]);
+  for (int i = executableIndex + 1; i < argc; ++i) {
+    command.push_back(L' ');
+    command += verbatimArguments ? argv[i] : quoteArg(argv[i]);
   }
 
   SetLastError(ERROR_SUCCESS);
