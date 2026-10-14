@@ -8,7 +8,9 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 if (process.platform !== "win32") {
-  throw new Error("The Windows native authority helper can only be built on Windows.");
+  throw new Error(
+    "The Windows native authority helper can only be built on Windows.",
+  );
 }
 
 const source = join(root, "native", "windows", "rea_windows_authority.cpp");
@@ -55,7 +57,15 @@ if (process.env.VCToolsInstallDir && process.env.WindowsSdkDir) {
   try {
     const found = spawnSync(
       vswhere,
-      ["-latest", "-products", "*", "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath"],
+      [
+        "-latest",
+        "-products",
+        "*",
+        "-requires",
+        "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+        "-property",
+        "installationPath",
+      ],
       { cwd: root, encoding: "utf8", windowsHide: true },
     );
     if (found.status === 0) installationPath = found.stdout.trim();
