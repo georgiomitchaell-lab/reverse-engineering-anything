@@ -65,25 +65,40 @@ static int createPrivateDir(const wchar_t* path) {
   BOOL gotControl = GetSecurityDescriptorControl(check, &control, &revision);
   bool protectedDacl = gotControl && (control & SE_DACL_PROTECTED) != 0;
   bool hasSystem = false, hasOwnerRights = false;
+  bool exactAcl = dacl != nullptr && dacl->AceCount == 2;
   if (dacl) {
     for (DWORD i = 0; i < dacl->AceCount; ++i) {
       void* raw = nullptr;
-      if (!GetAce(dacl, i, &raw)) continue;
+      if (!GetAce(dacl, i, &raw)) {
+        exactAcl = false;
+        continue;
+      }
       auto* header = static_cast<ACE_HEADER*>(raw);
-      if (header->AceType != ACCESS_ALLOWED_ACE_TYPE) continue;
+      if (header->AceType != ACCESS_ALLOWED_ACE_TYPE ||
+          header->AceFlags != (OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE)) {
+        exactAcl = false;
+        continue;
+      }
       auto* ace = static_cast<ACCESS_ALLOWED_ACE*>(raw);
+      if (ace->Mask != FILE_ALL_ACCESS) exactAcl = false;
       PSID sid = reinterpret_cast<PSID>(&ace->SidStart);
-      if (IsWellKnownSid(sid, WinLocalSystemSid)) hasSystem = true;
+      if (IsWellKnownSid(sid, WinLocalSystemSid)) {
+        if (hasSystem) exactAcl = false;
+        hasSystem = true;
+      }
       LPWSTR sidString = nullptr;
       if (ConvertSidToStringSidW(sid, &sidString)) {
         // S-1-3-4 is OWNER RIGHTS.
-        if (wcscmp(sidString, L"S-1-3-4") == 0) hasOwnerRights = true;
+        if (wcscmp(sidString, L"S-1-3-4") == 0) {
+          if (hasOwnerRights) exactAcl = false;
+          hasOwnerRights = true;
+        }
         LocalFree(sidString);
       }
     }
   }
   if (check) LocalFree(check);
-  if (!protectedDacl || !hasSystem || !hasOwnerRights) {
+  if (!protectedDacl || !exactAcl || !hasSystem || !hasOwnerRights) {
     RemoveDirectoryW(path);
     return fail(L"verify_dacl_contents", ERROR_ACCESS_DENIED);
   }
@@ -149,8 +164,8 @@ static int runInJob(int argc, wchar_t** argv) {
   }
   CloseHandle(pi.hProcess);
   // Closing the job enforces KILL_ON_JOB_CLOSE for any remaining descendants.
+  // Do not write status JSON to stdout: it is the provider's protocol stream.
   CloseHandle(job);
-  std::wcout << L"{\"ok\":true,\"operation\":\"run-job\",\"exit_code\":" << exitCode << L"}\n";
   return static_cast<int>(exitCode);
 }
 
