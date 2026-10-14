@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { mkdir, access } from "node:fs/promises";
+import { mkdir, access, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -69,17 +70,30 @@ if (process.env.VCToolsInstallDir && process.env.WindowsSdkDir) {
 
   const developerCommand = join(installationPath, "Common7", "Tools", "VsDevCmd.bat");
   const quote = (value) => `"${String(value).replaceAll('"', '""')}"`;
-  const command = [
-    `call ${quote(developerCommand)} -no_logo -arch=x64 -host_arch=x64`,
-    "&&",
-    "cl.exe",
-    ...compilerArgs.map(quote),
-  ].join(" ");
-  result = spawnSync(
-    process.env.ComSpec ?? "cmd.exe",
-    ["/d", "/s", "/c", `"${command}"`],
-    { cwd: root, encoding: "utf8", stdio: "inherit", windowsHide: true },
+  // Use a temporary .cmd file to avoid cmd.exe /c nested-quote ambiguity
+  // when the repository or Visual Studio installation path contains spaces.
+  const buildCommandFile = join(
+    tmpdir(),
+    `rea-build-windows-authority-${process.pid}.cmd`,
   );
+  const script = [
+    "@echo off",
+    `call ${quote(developerCommand)} -no_logo -arch=x64 -host_arch=x64`,
+    "if errorlevel 1 exit /b %errorlevel%",
+    `cl.exe ${compilerArgs.map(quote).join(" ")}`,
+    "exit /b %errorlevel%",
+    "",
+  ].join("\r\n");
+  try {
+    await writeFile(buildCommandFile, script, "utf8");
+    result = spawnSync(
+      process.env.ComSpec ?? "cmd.exe",
+      ["/d", "/c", buildCommandFile],
+      { cwd: root, encoding: "utf8", stdio: "inherit", windowsHide: true },
+    );
+  } finally {
+    await rm(buildCommandFile, { force: true });
+  }
 }
 if (result.error) throw result.error;
 if (result.status !== 0) {
