@@ -133,81 +133,82 @@ describe("Ghidra platform support", () => {
   it(
     "keeps Windows P0 unavailable until native isolation authority exists",
     () => {
-    const ghidra = provider({ ...installationHost(), platform: "win32" });
-    const nativeApplication = peTarget("x86_64");
+      const ghidra = provider({ ...installationHost(), platform: "win32" });
+      const nativeApplication = peTarget("x86_64");
 
-    expect(ghidra.inspectTargetSupport(nativeApplication)).toMatchObject({
-      status: "supported",
-      diagnostics: {
-        host_platform: "win32",
-        executable_role: "application",
-        managed: false,
-      },
-    });
-    expect(ghidra.inspectAvailability()).toMatchObject({
-      status: "unavailable",
-      code: "unsupported_host",
-      reason: expect.stringContaining(
-        "Complete Windows isolation is not proven",
-      ),
-      diagnostics: {
-        windows_security: {
-          job_object_process_ownership: expect.objectContaining({
-            available: false,
-            proof: "not-proven",
-          }),
-          private_runtime_dacl: expect.objectContaining({
-            available: false,
-            proof: "not-proven",
-          }),
-          reparse_safe_path_admission: expect.objectContaining({
-            available: false,
-            proof: "not-proven",
-          }),
+      expect(ghidra.inspectTargetSupport(nativeApplication)).toMatchObject({
+        status: "supported",
+        diagnostics: {
+          host_platform: "win32",
+          executable_role: "application",
+          managed: false,
         },
-      },
-    });
-    expect(ghidra.capabilities()).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          operation: "list_procedures",
-          available: false,
-          availabilityCode: "unsupported_host",
-          limitations: expect.arrayContaining([
-            expect.stringContaining("bounded taskkill cleanup"),
-            expect.stringContaining("private DACL enforcement"),
-          ]),
+      });
+      expect(ghidra.inspectAvailability()).toMatchObject({
+        status: "unavailable",
+        code: "unsupported_host",
+        reason: expect.stringContaining(
+          "Complete Windows isolation is not proven",
+        ),
+        diagnostics: {
+          windows_security: {
+            job_object_process_ownership: expect.objectContaining({
+              available: false,
+              proof: "not-proven",
+            }),
+            private_runtime_dacl: expect.objectContaining({
+              available: false,
+              proof: "not-proven",
+            }),
+            reparse_safe_path_admission: expect.objectContaining({
+              available: false,
+              proof: "not-proven",
+            }),
+          },
+        },
+      });
+      expect(ghidra.capabilities()).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            operation: "list_procedures",
+            available: false,
+            availabilityCode: "unsupported_host",
+            limitations: expect.arrayContaining([
+              expect.stringContaining("bounded taskkill cleanup"),
+              expect.stringContaining("private DACL enforcement"),
+            ]),
+          }),
+        ]),
+      );
+      expect(
+        ghidra.inspectTargetSupport({
+          ...nativeApplication,
+          executableRole: "shared-library",
         }),
-      ]),
-    );
-    expect(
-      ghidra.inspectTargetSupport({
-        ...nativeApplication,
-        executableRole: "shared-library",
-      }),
-    ).toMatchObject({
-      status: "unsupported",
-      code: "target_role_unsupported",
-    });
-    expect(
-      ghidra.inspectTargetSupport({ ...nativeApplication, managed: true }),
-    ).toMatchObject({
-      status: "unsupported",
-      code: "managed_target_unsupported",
-    });
-    expect(
-      ghidra.inspectTargetSupport(executableTarget("elf", "x86_64")),
-    ).toMatchObject({
-      status: "unsupported",
-      code: "target_format_unsupported",
-    });
-    expect(
-      ghidra.inspectTargetSupport(executableTarget("pe", "arm64")),
-    ).toMatchObject({
-      status: "unsupported",
-      code: "architecture_unsupported",
-    });
-  });
+      ).toMatchObject({
+        status: "unsupported",
+        code: "target_role_unsupported",
+      });
+      expect(
+        ghidra.inspectTargetSupport({ ...nativeApplication, managed: true }),
+      ).toMatchObject({
+        status: "unsupported",
+        code: "managed_target_unsupported",
+      });
+      expect(
+        ghidra.inspectTargetSupport(executableTarget("elf", "x86_64")),
+      ).toMatchObject({
+        status: "unsupported",
+        code: "target_format_unsupported",
+      });
+      expect(
+        ghidra.inspectTargetSupport(executableTarget("pe", "arm64")),
+      ).toMatchObject({
+        status: "unsupported",
+        code: "architecture_unsupported",
+      });
+    },
+  );
 });
 
 describe("Ghidra client projection", () => {
