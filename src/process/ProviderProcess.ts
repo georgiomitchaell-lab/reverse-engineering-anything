@@ -106,12 +106,27 @@ export type ProviderProcessStopResult =
 export const spawnOwnedProviderProcess = async (
   options: OwnedProviderProcessSpawnOptions,
 ): Promise<SpawnedOwnedProviderProcess> => {
-  const child = spawn(options.command, [...options.arguments], {
+  // On Windows, opt into the native launcher only when an explicit executable
+  // path is configured. The helper creates the target suspended, assigns it to
+  // a Job Object, then resumes it; killing the helper closes the job handle.
+  // Never silently claim Job Object ownership when the helper is not configured.
+  const nativeAuthorityPath =
+    process.platform === "win32" ? process.env.REA_WINDOWS_AUTHORITY_PATH : undefined;
+  const useWindowsJob =
+    typeof nativeAuthorityPath === "string" && nativeAuthorityPath.trim().length > 0;
+  const launchCommand = useWindowsJob ? nativeAuthorityPath : options.command;
+  const launchArguments = useWindowsJob
+    ? ["run-job", "--", options.command, ...options.arguments]
+    : [...options.arguments];
+
+  const child = spawn(launchCommand, launchArguments, {
     shell: false,
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
     detached: process.platform !== "win32",
-    windowsVerbatimArguments: options.windowsVerbatimArguments ?? false,
+    windowsVerbatimArguments: useWindowsJob
+      ? false
+      : (options.windowsVerbatimArguments ?? false),
     env: {
       ...process.env,
       ...options.env,
@@ -129,7 +144,11 @@ export const spawnOwnedProviderProcess = async (
     expectedParentPid: process.pid,
     ...(options.expectedCommand === null
       ? {}
-      : { expectedCommand: options.expectedCommand ?? options.command }),
+      : {
+          expectedCommand: useWindowsJob
+            ? nativeAuthorityPath
+            : (options.expectedCommand ?? options.command),
+        }),
   };
   return { process: child, ownership };
 };
