@@ -8,9 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 if (process.platform !== "win32") {
-  throw new Error(
-    "The Windows native authority helper can only be built on Windows.",
-  );
+  throw new Error("The Windows native authority helper can only be built on Windows.");
 }
 
 const source = join(root, "native", "windows", "rea_windows_authority.cpp");
@@ -57,15 +55,7 @@ if (process.env.VCToolsInstallDir && process.env.WindowsSdkDir) {
   try {
     const found = spawnSync(
       vswhere,
-      [
-        "-latest",
-        "-products",
-        "*",
-        "-requires",
-        "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
-        "-property",
-        "installationPath",
-      ],
+      ["-latest", "-products", "*", "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath"],
       { cwd: root, encoding: "utf8", windowsHide: true },
     );
     if (found.status === 0) installationPath = found.stdout.trim();
@@ -78,12 +68,7 @@ if (process.env.VCToolsInstallDir && process.env.WindowsSdkDir) {
     );
   }
 
-  const developerCommand = join(
-    installationPath,
-    "Common7",
-    "Tools",
-    "VsDevCmd.bat",
-  );
+  const developerCommand = join(installationPath, "Common7", "Tools", "VsDevCmd.bat");
   const quote = (value) => `"${String(value).replaceAll('"', '""')}"`;
   // Use a temporary .cmd file to avoid cmd.exe /c nested-quote ambiguity
   // when the repository or Visual Studio installation path contains spaces.
@@ -112,11 +97,8 @@ if (process.env.VCToolsInstallDir && process.env.WindowsSdkDir) {
 }
 if (result.error) throw result.error;
 if (result.status !== 0) {
-  throw new Error(
-    `Windows native authority build failed (exit ${result.status}).`,
-  );
+  throw new Error(`Windows native authority build failed (exit ${result.status}).`);
 }
 await access(output);
-process.stdout.write(
-  "Set REA_WINDOWS_AUTHORITY_PATH to this executable to enable Job Object launches.\n",
-);
+process.stdout.write(`Windows native helper built: ${output}\n`);
+process.stdout.write("Set REA_WINDOWS_AUTHORITY_PATH to this executable to enable Job Object launches.\n");
