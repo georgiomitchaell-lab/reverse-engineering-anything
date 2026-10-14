@@ -137,8 +137,7 @@ try {
       "Native helper unexpectedly created a directory through a junction",
     );
   } catch (error) {
-    if (error?.code !== "ENOENT")
-      throw error;
+    if (error?.code !== "ENOENT") throw error;
   }
 
   // The provider's stdout is a protocol stream. The native supervisor must
