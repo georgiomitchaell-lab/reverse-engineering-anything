@@ -68,8 +68,7 @@ export const serializeProductCatalog = (catalog) =>
   `${formatCatalogJson(catalog, 0, 0)}\n`;
 
 const formatCatalogJson = (value, indent, prefixLength = indent) => {
-  if (value === null || typeof value !== "object")
-    return JSON.stringify(value);
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
 
   const indentation = " ".repeat(indent);
   if (Array.isArray(value)) {
