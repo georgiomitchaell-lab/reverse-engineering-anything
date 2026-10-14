@@ -80,7 +80,9 @@ const formatCatalogJson = (value, indent, prefixLength = indent) => {
         ["string", "number", "boolean"].includes(typeof item),
     );
     if (primitiveItems) {
-      const inline = `[${value.map((item) => JSON.stringify(item)).join(", ")}]`;
+      const inline = `[${value
+        .map((item) => JSON.stringify(item))
+        .join(", ")}]`;
       if (prefixLength + inline.length <= 80) return inline;
     }
     return `[\n${value
