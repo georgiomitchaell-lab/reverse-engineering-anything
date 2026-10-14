@@ -47,6 +47,9 @@ using NtCreateFileFn = NTSTATUS (NTAPI*)(
   ULONG, ULONG, ULONG, ULONG, PVOID, ULONG);
 using RtlNtStatusToDosErrorFn = ULONG (WINAPI*)(NTSTATUS);
 
+static constexpr ULONG kNtFileOpen = 1;
+static constexpr ULONG kNtFileCreate = 2;
+
 static DWORD ntError(NTSTATUS status) {
   auto convert = reinterpret_cast<RtlNtStatusToDosErrorFn>(
     GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlNtStatusToDosError"));
@@ -114,7 +117,7 @@ static int createPrivateDir(const wchar_t* inputPath) {
   HANDLE current = INVALID_HANDLE_VALUE;
   NTSTATUS status = openRelative(ntCreateFile, nullptr, nativeRoot,
       FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | FILE_TRAVERSE | SYNCHRONIZE,
-      FILE_OPEN, FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT,
+      kNtFileOpen, FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT,
       nullptr, &current);
   if (status < 0) return fail(L"open_volume_root", ntError(status));
 
@@ -144,7 +147,7 @@ static int createPrivateDir(const wchar_t* inputPath) {
     if (final) {
       status = openRelative(ntCreateFile, current, component,
           READ_CONTROL | FILE_READ_ATTRIBUTES | FILE_WRITE_DAC | DELETE | SYNCHRONIZE,
-          FILE_CREATE,
+          kNtFileCreate,
           FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT,
           sd, &child);
       if (status < 0) {
@@ -225,7 +228,7 @@ static int createPrivateDir(const wchar_t* inputPath) {
 
     status = openRelative(ntCreateFile, current, component,
         FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | FILE_TRAVERSE | SYNCHRONIZE,
-        FILE_OPEN,
+        kNtFileOpen,
         FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT,
         nullptr, &child);
     if (status < 0) {
