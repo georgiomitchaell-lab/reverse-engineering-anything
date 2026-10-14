@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import process from "node:process";
 
@@ -26,10 +27,14 @@ export async function verifyPackagePack({ root, workspace }) {
     (await exec("tar", ["-xOf", join(root, tarball), "package/package.json"]))
       .stdout,
   );
+  const sourceManifest = JSON.parse(
+    await readFile(join(root, "package.json"), "utf8"),
+  );
   if (
     packedManifest.scripts?.postinstall !== undefined ||
     packedManifest.dependencies?.["node-pty"] !== undefined ||
-    packedManifest.dependencies?.["@lydell/node-pty"] !== "1.1.0"
+    packedManifest.dependencies?.["@lydell/node-pty"] !==
+      sourceManifest.dependencies?.["@lydell/node-pty"]
   )
     throw new Error("package retained a lifecycle-dependent PTY installation");
   if (
