@@ -22,6 +22,7 @@ export const probeProcessCaptureCapability =
           cols: 80,
           rows: 24,
           name: "xterm-256color",
+          ...(process.platform === "win32" ? { useConptyDll: true } : {}),
         },
       );
       await new Promise<void>((resolveExit) =>
