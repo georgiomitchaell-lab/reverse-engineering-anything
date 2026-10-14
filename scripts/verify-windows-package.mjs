@@ -241,9 +241,18 @@ try {
     await client.close();
   }
 
+  const verifierReport = await completeVerifierRun(verifierRun);
+  if (
+    process.platform === "win32" &&
+    verifierReport.process_lineage.status !== "verified"
+  ) {
+    throw new Error(
+      `Windows process ownership was not verified: ${verifierReport.process_lineage.reason ?? "native Job Object membership unavailable"}`,
+    );
+  }
   process.stdout.write(
     `${JSON.stringify({
-      verifier_run: await completeVerifierRun(verifierRun),
+      verifier_run: verifierReport,
       ok: true,
       platform: process.platform,
       package: packageResult.filename,
