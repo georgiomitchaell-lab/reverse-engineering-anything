@@ -60,6 +60,12 @@ if (process.platform !== "win32") {
   if (curatedExit !== 0) {
     process.exitCode = curatedExit;
   } else {
+    // The PTY lifecycle regression uses a mocked process boundary and is also
+    // run without the optional native authority in local Windows verification.
+    // Keep the authority enabled for curated security tests, then remove the
+    // override before this isolated ConPTY regression to avoid native-helper
+    // initialization interfering with Vitest's worker process.
+    delete process.env.REA_WINDOWS_AUTHORITY_PATH;
     process.exitCode = await runVitest([
       "run",
       "--coverage.enabled=false",
