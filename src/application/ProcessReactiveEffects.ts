@@ -10,13 +10,14 @@ import type {
 } from "../domain/processReactiveScenario.js";
 import type { ProcessCaptureJournal } from "./ProcessCaptureJournal.js";
 import { normalizeProcessElapsedTime } from "./ProcessNormalization.js";
+import { terminateProcessTerminal } from "./ProcessCaptureLifecycle.js";
 
 /** Minimal PTY authority used by the admitted reactive action slice. */
 export interface ProcessReactiveTerminal {
   write(data: string): void;
   resize(columns: number, rows: number): void;
   closeInput(): void;
-  kill(signal: "SIGINT" | "SIGTERM" | "SIGKILL"): void;
+  kill(signal?: string): void;
 }
 
 /** Rendered-terminal resize seam kept in lockstep with the PTY. */
@@ -93,7 +94,11 @@ const performTerminalAction = (
       normalizeProcessElapsedTime(atMs, host.timeBucketMs),
     );
   } else if (action.type === "close_stdin") terminal.closeInput();
-  else terminal.kill(action.signal);
+  else if (process.platform === "win32" && action.signal === "SIGINT") {
+    // ConPTY does not accept POSIX signals. A Ctrl+C character is the Windows
+    // console input equivalent for interruptible console applications.
+    terminal.write("\\x03");
+  } else terminateProcessTerminal(terminal, action.signal);
 };
 
 const recordInteraction = (
