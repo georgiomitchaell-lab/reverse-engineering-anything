@@ -84,10 +84,14 @@ try {
     daclResult?.operation !== "create-private-dir" ||
     daclResult?.dacl !== "verified-protected"
   )
-    throw new Error("Packaged native helper did not verify the private runtime DACL");
+    throw new Error(
+      "Packaged native helper did not verify the private runtime DACL",
+    );
 
   if (daclResult?.path_admission !== "handle-relative-no-reparse")
-    throw new Error("Packaged native helper did not attest handle-relative no-reparse admission");
+    throw new Error(
+      "Packaged native helper did not attest handle-relative no-reparse admission",
+    );
 
   // A junction is an unprivileged Windows reparse-point fixture. The helper
   // must reject a parent component opened relative to its validated handle.
@@ -101,7 +105,9 @@ try {
     { windowsHide: true },
   );
   if (junction.code !== undefined && junction.code !== 0)
-    throw new Error("Could not create Windows junction fixture for reparse test");
+    throw new Error(
+      "Could not create Windows junction fixture for reparse test",
+    );
   let rejectedJunction = false;
   try {
     await exec(nativeHelper, ["create-private-dir", junctionProbe], {
@@ -109,14 +115,24 @@ try {
     });
   } catch (error) {
     rejectedJunction = true;
-    if (!String(error?.stderr ?? "").includes("reject_parent_reparse_component"))
-      throw new Error("Native helper failed the junction probe for an unexpected reason");
+    if (
+      !String(error?.stderr ?? "").includes("reject_parent_reparse_component")
+    )
+      throw new Error(
+        "Native helper failed the junction probe for an unexpected reason",
+      );
   }
   if (!rejectedJunction)
-    throw new Error("Packaged native helper followed a junction parent component");
+    throw new Error(
+      "Packaged native helper followed a junction parent component",
+    );
   try {
-    await import("node:fs/promises").then(({ access }) => access(junctionProbe));
-    throw new Error("Native helper unexpectedly created a directory through a junction");
+    await import("node:fs/promises").then(({ access }) =>
+      access(junctionProbe),
+    );
+    throw new Error(
+      "Native helper unexpectedly created a directory through a junction",
+    );
   } catch (error) {
     if (error?.code !== "ENOENT")
       throw error;
@@ -139,7 +155,9 @@ try {
     { windowsHide: true },
   );
   if (jobProbe.stdout.trim() !== "REA_JOB_STDOUT_OK")
-    throw new Error("Packaged Job Object helper contaminated or lost provider stdout");
+    throw new Error(
+      "Packaged Job Object helper contaminated or lost provider stdout",
+    );
 
   const environment = {
     ...process.env,
