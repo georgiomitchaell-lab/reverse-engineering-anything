@@ -161,6 +161,7 @@ try {
     throw new Error(
       "Packaged Job Object helper contaminated or lost provider stdout",
     );
+  }
 
   const environment = {
     ...process.env,
