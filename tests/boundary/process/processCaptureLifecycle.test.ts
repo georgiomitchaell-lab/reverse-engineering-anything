@@ -11,7 +11,11 @@ import {
   captureProcessScenario,
   ProcessCaptureError,
 } from "../../../src/application/ProcessHarness.js";
-import { terminateProcessTerminal } from "../../../src/application/ProcessCaptureLifecycle.js";
+import {
+  awaitTerminalExit,
+  terminateProcessTerminal,
+} from "../../../src/application/ProcessCaptureLifecycle.js";
+import type { ProcessTimer } from "../../../src/application/ProcessTimer.js";
 import {
   parseProcessScenario,
   type ProcessExecutionPolicy,
@@ -34,6 +38,66 @@ it("preserves the requested signal on POSIX", () => {
   terminateProcessTerminal({ kill }, "SIGTERM", "linux");
   expect(kill).toHaveBeenCalledWith("SIGTERM");
 });
+
+it.skipIf(process.platform !== "win32")(
+  "defers termination until Windows PTY is ready",
+  async () => {
+    let pid = 0;
+    let onExit:
+      | ((event: { readonly exitCode: number; readonly signal?: number }) => void)
+      | undefined;
+    const kill = vi.fn();
+    const terminal = {
+      get pid() {
+        return pid;
+      },
+      kill,
+      onExit: (
+        listener: (event: {
+          readonly exitCode: number;
+          readonly signal?: number;
+        }) => void,
+      ) => {
+        onExit = listener;
+      },
+    };
+    const scenario = parseProcessScenario({
+      executable: process.execPath,
+      working_directory: dirname(processFixture),
+      timeout_ms: 10,
+      idle_timeout_ms: 10_000,
+    });
+    const timers = new Set<ProcessTimer>();
+    const pendingExit = awaitTerminalExit({
+      terminal: terminal as never,
+      scenario,
+      started: Date.now() - 100,
+      lastOutput: () => Date.now(),
+      signal: undefined,
+      timers,
+      interactions: [],
+      dispatchedEventIndexes: new Set<number>(),
+      recordEvent: () => undefined,
+    });
+
+    try {
+      await new Promise<void>((resolve) => setTimeout(resolve, 60));
+      expect(kill).not.toHaveBeenCalled();
+
+      pid = 4321;
+      await new Promise<void>((resolve) => setTimeout(resolve, 60));
+      expect(kill).toHaveBeenCalledOnce();
+
+      onExit?.({ exitCode: 1, signal: 0 });
+      await expect(pendingExit).resolves.toMatchObject({
+        exitCode: 1,
+        reason: "timeout",
+      });
+    } finally {
+      onExit?.({ exitCode: 1, signal: 0 });
+    }
+  },
+);
 
 itWithCaptureCapability(
   "does not follow or disclose symlink targets outside declared roots",

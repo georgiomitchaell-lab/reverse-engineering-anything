@@ -304,17 +304,28 @@ export const awaitTerminalExit = async ({
       timers.clear();
       resolveExit({ ...exit, reason });
     });
+    let terminationRequested = false;
     const timeout = scheduleProcessInterval(() => {
-      if (signal?.aborted === true) {
-        reason = "cancelled";
-        terminateProcessTerminal(terminal, "SIGKILL");
-      } else if (Date.now() - started >= scenario.timeout_ms) {
-        reason = "timeout";
-        terminateProcessTerminal(terminal, "SIGKILL");
-      } else if (Date.now() - lastOutput() >= scenario.idle_timeout_ms) {
-        reason = "idle_timeout";
-        terminateProcessTerminal(terminal, "SIGKILL");
+      if (reason === "exited") {
+        if (signal?.aborted === true) {
+          reason = "cancelled";
+        } else if (Date.now() - started >= scenario.timeout_ms) {
+          reason = "timeout";
+        } else if (Date.now() - lastOutput() >= scenario.idle_timeout_ms) {
+          reason = "idle_timeout";
+        }
       }
+      if (reason === "exited" || terminationRequested) return;
+      // ConPTY starts asynchronously on Windows. A timeout can elapse while
+      // node-pty still reports pid 0 because its data pipe is not ready yet.
+      // Calling kill() in that window can tear down a half-created terminal
+      // and crash an embedding worker on older Windows builds. Latch the
+      // initiating reason, then terminate exactly once when the shell PID is
+      // available. If startup itself fails, node-pty's connection timeout
+      // emits onExit and settles this wait without an unsafe premature kill.
+      if (process.platform === "win32" && terminal.pid <= 0) return;
+      terminationRequested = true;
+      terminateProcessTerminal(terminal, "SIGKILL");
     }, 20);
     timers.add(timeout);
   });
