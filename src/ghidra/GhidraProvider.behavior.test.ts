@@ -130,7 +130,9 @@ describe("Ghidra provider", () => {
 });
 
 describe("Ghidra platform support", () => {
-  it("keeps Windows P0 unavailable until native isolation authority exists", () => {
+  it(
+    "keeps Windows P0 unavailable until native isolation authority exists",
+    () => {
     const ghidra = provider({ ...installationHost(), platform: "win32" });
     const nativeApplication = peTarget("x86_64");
 
@@ -145,7 +147,9 @@ describe("Ghidra platform support", () => {
     expect(ghidra.inspectAvailability()).toMatchObject({
       status: "unavailable",
       code: "unsupported_host",
-      reason: expect.stringContaining("Complete Windows isolation is not proven"),
+      reason: expect.stringContaining(
+        "Complete Windows isolation is not proven",
+      ),
       diagnostics: {
         windows_security: {
           job_object_process_ownership: expect.objectContaining({
