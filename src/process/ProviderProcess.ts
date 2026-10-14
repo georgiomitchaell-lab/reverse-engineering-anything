@@ -107,10 +107,9 @@ export type ProviderProcessStopResult =
 export const spawnOwnedProviderProcess = async (
   options: OwnedProviderProcessSpawnOptions,
 ): Promise<SpawnedOwnedProviderProcess> => {
-  // On Windows, opt into the native launcher only when an explicit executable
-  // path is configured. The helper creates the target suspended, assigns it to
-  // a Job Object, then resumes it; killing the helper closes the job handle.
-  // Never silently claim Job Object ownership when the helper is not configured.
+  // On Windows, use the explicitly configured helper or the helper adjacent
+  // to the compiled package. Source-tree tests must not discover dist/ helpers.
+  // The helper assigns the suspended child to a Job Object before resuming it.
   const nativeAuthorityPath =
     process.platform === "win32" ? resolveWindowsNativeHelperPath() : undefined;
   const useWindowsJob =
