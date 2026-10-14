@@ -1,6 +1,4 @@
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { format, resolveConfig } from "prettier";
+
 
 import { assertSameNames, digest, loadSources } from "./catalog-core.mjs";
 import {
@@ -68,18 +66,41 @@ export const createProductCatalog = async (root) => {
 };
 
 /** Stable checked-in representation of the product catalog. */
-export const serializeProductCatalog = async (catalog) => {
-  const filepath = join(
-    dirname(fileURLToPath(import.meta.url)),
-    "..",
-    "..",
-    "docs",
-    "product-catalog.json",
-  );
-  const config = await resolveConfig(filepath);
-  return format(JSON.stringify(catalog), {
-    ...config,
-    filepath,
-    parser: "json",
-  });
+export const serializeProductCatalog = (catalog) =>
+  `${formatCatalogJson(catalog, 0, 0)}\\n`;
+
+const formatCatalogJson = (value, indent, prefixLength = indent) => {
+  if (value === null || typeof value !== "object")
+    return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "[]";
+    const primitiveItems = value.every(
+      (item) =>
+        item === null ||
+        ["string", "number", "boolean"].includes(typeof item),
+    );
+    if (primitiveItems) {
+      const inline = `[${value.map((item) => JSON.stringify(item)).join(", ")}]`;
+      if (prefixLength + inline.length <= 80) return inline;
+    }
+    return `[\\n${value
+      .map(
+        (item) =>
+          `${" ".repeat(indent + 2)}${formatCatalogJson(item, indent + 2)}`,
+      )
+      .join(",\\n")}\\n${" ".repeat(indent)}]`;
+  }
+  const entries = Object.entries(value);
+  if (entries.length === 0) return "{}";
+  return `{\\n${entries
+    .map(([key, item]) => {
+      const serializedKey = JSON.stringify(key);
+      const itemPrefixLength = indent + 2 + serializedKey.length + 2;
+      return `${" ".repeat(indent + 2)}${serializedKey}: ${formatCatalogJson(
+        item,
+        indent + 2,
+        itemPrefixLength,
+      )}`;
+    })
+    .join(",\\n")}\\n${" ".repeat(indent)}}`;
 };
