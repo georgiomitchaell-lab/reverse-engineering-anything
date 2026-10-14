@@ -1,0 +1,41 @@
+name: Regenerate 4.0.0 release artifacts
+on:
+  push:
+    branches:
+      - fix/release-4.0.0-generated
+permissions:
+  contents: write
+concurrency:
+  group: regenerate-release-artifacts
+  cancel-in-progress: false
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/release-4.0.0-generated
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Regenerate canonical artifacts
+        run: npm run docs:generate
+      - name: Commit generated artifacts and remove temporary workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -u
+          git add docs skills src
+          git rm -f .github/workflows/regenerate-release.yml
+          if git diff --cached --quiet; then
+            echo "No generated changes to commit."
+            exit 0
+          fi
+          git commit -m "fix: regenerate canonical artifacts for 4.0.0"
+          git push origin HEAD:fix/release-4.0.0-generated
