@@ -70,6 +70,8 @@ export const serializeProductCatalog = (catalog) =>
 const formatCatalogJson = (value, indent, prefixLength = indent) => {
   if (value === null || typeof value !== "object")
     return JSON.stringify(value);
+
+  const indentation = " ".repeat(indent);
   if (Array.isArray(value)) {
     if (value.length === 0) return "[]";
     const primitiveItems = value.every(
@@ -78,29 +80,32 @@ const formatCatalogJson = (value, indent, prefixLength = indent) => {
         ["string", "number", "boolean"].includes(typeof item),
     );
     if (primitiveItems) {
-      const inline = `[${value
-        .map((item) => JSON.stringify(item))
-        .join(", ")}]`;
+      const inlineItems = value.map((item) => JSON.stringify(item));
+      const inline = `[${inlineItems.join(", ")}]`;
       if (prefixLength + inline.length <= 80) return inline;
     }
-    return `[\n${value
-      .map(
-        (item) =>
-          `${" ".repeat(indent + 2)}${formatCatalogJson(item, indent + 2)}`,
-      )
-      .join(",\n")}\n${" ".repeat(indent)}]`;
+
+    const itemIndentation = " ".repeat(indent + 2);
+    const items = value.map((item) => {
+      const serializedItem = formatCatalogJson(item, indent + 2);
+      return `${itemIndentation}${serializedItem}`;
+    });
+    return `[\n${items.join(",\n")}\n${indentation}]`;
   }
+
   const entries = Object.entries(value);
   if (entries.length === 0) return "{}";
-  return `{\n${entries
-    .map(([key, item]) => {
-      const serializedKey = JSON.stringify(key);
-      const itemPrefixLength = indent + 2 + serializedKey.length + 2;
-      return `${" ".repeat(indent + 2)}${serializedKey}: ${formatCatalogJson(
-        item,
-        indent + 2,
-        itemPrefixLength,
-      )}`;
-    })
-    .join(",\n")}\n${" ".repeat(indent)}}`;
+
+  const properties = entries.map(([key, item]) => {
+    const serializedKey = JSON.stringify(key);
+    const itemPrefixLength = indent + 2 + serializedKey.length + 2;
+    const serializedValue = formatCatalogJson(
+      item,
+      indent + 2,
+      itemPrefixLength,
+    );
+    return `${" ".repeat(indent + 2)}${serializedKey}: ${serializedValue}`;
+  });
+
+  return `{\n${properties.join(",\n")}\n${indentation}}`;
 };
