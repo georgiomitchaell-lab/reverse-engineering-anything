@@ -1,5 +1,16 @@
 # Changelog
 
+## [4.0.1](https://github.com/georgiomitchaell-lab/reverse-engineering-anything/compare/rea-agents-4.0.0...rea-agents-4.0.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* regenerate release metadata and package validation artifacts ([8668404](https://github.com/georgiomitchaell-lab/reverse-engineering-anything/commit/8668404c5a30b8d8af711dee44275ea09c39dae6))
+* **release:** clean npm collision error message ([9522c0c](https://github.com/georgiomitchaell-lab/reverse-engineering-anything/commit/9522c0c3434e9a5c93382d8350ea58936745a00e))
+* **release:** correct npm collision guard quoting ([0f218b9](https://github.com/georgiomitchaell-lab/reverse-engineering-anything/commit/0f218b9b0d9680a49f8c5689662692f652bcc43c))
+* **release:** fail fast on npm package identity collision ([71af8ea](https://github.com/georgiomitchaell-lab/reverse-engineering-anything/commit/71af8ea26af94d2fb62a75e94af4a21561e40be8))
+* **release:** repair npm identity guard ([0197ae5](https://github.com/georgiomitchaell-lab/reverse-engineering-anything/commit/0197ae55e40a3e4a0799f0135a623b5b50433bc8))
+
 ## [4.0.0](https://github.com/georgiomitchaell-lab/reverse-engineering-anything/compare/rea-agents-3.2.1...rea-agents-4.0.0) (2026-10-14)
 
 
