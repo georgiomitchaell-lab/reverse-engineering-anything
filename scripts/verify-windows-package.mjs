@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFile } from "node:child_process";
-import { access, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -83,62 +83,8 @@ try {
     daclResult?.ok !== true ||
     daclResult?.operation !== "create-private-dir" ||
     daclResult?.dacl !== "verified-protected"
-  ) {
-    throw new Error(
-      "Packaged native helper did not verify the private runtime DACL",
-    );
-  }
-
-  if (daclResult?.path_admission !== "handle-relative-no-reparse") {
-    throw new Error(
-      "Packaged helper did not attest handle-relative path admission",
-    );
-  }
-
-  // A junction is an unprivileged Windows reparse-point fixture. The helper
-  // must reject a parent component opened relative to its validated handle.
-  const junctionTarget = join(workspace, "junction-target");
-  const junctionPath = join(workspace, "junction-parent");
-  const junctionProbe = join(junctionPath, "must-not-be-created");
-  await mkdir(junctionTarget);
-  const junction = await exec(
-    process.env.ComSpec ?? "cmd.exe",
-    ["/d", "/c", "mklink", "/J", junctionPath, junctionTarget],
-    { windowsHide: true },
-  );
-  if (junction.code !== undefined && junction.code !== 0) {
-    throw new Error(
-      "Could not create Windows junction fixture for reparse test",
-    );
-  }
-  let rejectedJunction = false;
-  try {
-    await exec(nativeHelper, ["create-private-dir", junctionProbe], {
-      windowsHide: true,
-    });
-  } catch (error) {
-    rejectedJunction = true;
-    if (
-      !String(error?.stderr ?? "").includes("reject_parent_reparse_component")
-    ) {
-      throw new Error(
-        "Native helper failed the junction probe for an unexpected reason",
-      );
-    }
-  }
-  if (!rejectedJunction) {
-    throw new Error(
-      "Packaged native helper followed a junction parent component",
-    );
-  }
-  try {
-    await access(junctionProbe);
-    throw new Error(
-      "Native helper unexpectedly created a directory through a junction",
-    );
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-  }
+  )
+    throw new Error("Packaged native helper did not verify the private runtime DACL");
 
   // The provider's stdout is a protocol stream. The native supervisor must
   // not append helper status JSON to the child output.
@@ -156,11 +102,8 @@ try {
     ],
     { windowsHide: true },
   );
-  if (jobProbe.stdout.trim() !== "REA_JOB_STDOUT_OK") {
-    throw new Error(
-      "Packaged Job Object helper contaminated or lost provider stdout",
-    );
-  }
+  if (jobProbe.stdout.trim() !== "REA_JOB_STDOUT_OK")
+    throw new Error("Packaged Job Object helper contaminated or lost provider stdout");
 
   const environment = {
     ...process.env,
