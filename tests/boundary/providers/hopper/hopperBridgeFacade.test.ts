@@ -1,17 +1,16 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 const execute = promisify(execFile);
-const bridgePath = new URL(
-  "../../../../bridge/hopper_bridge.py",
-  import.meta.url,
+const bridgePath = fileURLToPath(
+  new URL("../../../../bridge/hopper_bridge.py", import.meta.url),
 );
-const probePath = new URL(
-  "../../../fixtures/hopperBridgeFacadeProbe.py",
-  import.meta.url,
+const probePath = fileURLToPath(
+  new URL("../../../fixtures/hopperBridgeFacadeProbe.py", import.meta.url),
 );
 
 const probeResultSchema = z.strictObject({
@@ -98,7 +97,7 @@ describe("Hopper API facade", () => {
   it("imports without Hopper globals and gates exhaustive work during analysis", async () => {
     const { stdout } = await execute(
       "python3",
-      [probePath.pathname, bridgePath.pathname],
+      [probePath, bridgePath],
       {
         encoding: "utf8",
         timeout: 3_000,
