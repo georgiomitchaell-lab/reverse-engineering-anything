@@ -37,125 +37,216 @@ static int fail(const wchar_t* where, DWORD e = GetLastError()) {
   return 1;
 }
 
-// Fail closed when an existing path component is a reparse point. Open each
-// component itself (not its target) before applying the private-runtime ACL.
-static bool pathHasReparseComponent(const wchar_t* input, DWORD* errorOut) {
-  DWORD needed = GetFullPathNameW(input, 0, nullptr, nullptr);
-  if (needed == 0) { *errorOut = GetLastError(); return true; }
-  std::vector<wchar_t> buffer(needed + 1);
-  DWORD length = GetFullPathNameW(input, static_cast<DWORD>(buffer.size()), buffer.data(), nullptr);
-  if (length == 0 || length >= buffer.size()) {
-    *errorOut = length == 0 ? GetLastError() : ERROR_FILENAME_EXCED_RANGE;
-    return true;
-  }
-  std::wstring full(buffer.data(), length);
-  if (full.size() < 3 || full[1] != L':' || (full[2] != L'\\' && full[2] != L'/')) {
-    *errorOut = ERROR_INVALID_NAME;
-    return true;
-  }
-  for (size_t i = 3; i <= full.size(); ++i) {
-    if (i < full.size() && full[i] != L'\\' && full[i] != L'/') continue;
-    if (i == 3) continue;
-    std::wstring component = full.substr(0, i);
-    DWORD attrs = GetFileAttributesW(component.c_str());
-    if (attrs == INVALID_FILE_ATTRIBUTES) {
-      DWORD error = GetLastError();
-      if (i == full.size() && (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)) {
-        *errorOut = ERROR_SUCCESS;
-        return false;
-      }
-      *errorOut = error;
-      return true;
-    }
-    HANDLE handle = CreateFileW(component.c_str(), FILE_READ_ATTRIBUTES,
-      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
-      FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
-    if (handle == INVALID_HANDLE_VALUE) { *errorOut = GetLastError(); return true; }
-    FILE_ATTRIBUTE_TAG_INFO info{};
-    BOOL ok = GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &info, sizeof(info));
-    DWORD error = ok ? ERROR_SUCCESS : GetLastError();
-    CloseHandle(handle);
-    if (!ok) { *errorOut = error; return true; }
-    if ((info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
-      *errorOut = ERROR_CANT_ACCESS_FILE;
-      return true;
-    }
-  }
-  *errorOut = ERROR_SUCCESS;
-  return false;
+// Create/open each path component relative to a validated directory handle.
+// NtCreateFile + FILE_OPEN_REPARSE_POINT prevents name resolution from following
+// a reparse point between validation and use. The final directory is created
+// relative to the held parent handle with FILE_CREATE (never open-or-create).
+using NtCreateFileFn = NTSTATUS (NTAPI*)(
+  PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, PIO_STATUS_BLOCK, PLARGE_INTEGER,
+  ULONG, ULONG, ULONG, ULONG, PVOID, ULONG);
+using RtlNtStatusToDosErrorFn = ULONG (WINAPI*)(NTSTATUS);
+
+static DWORD ntError(NTSTATUS status) {
+  auto convert = reinterpret_cast<RtlNtStatusToDosErrorFn>(
+    GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlNtStatusToDosError"));
+  return convert ? convert(status) : ERROR_GEN_FAILURE;
 }
 
-static int createPrivateDir(const wchar_t* path) {
-  DWORD pathError = ERROR_SUCCESS;
-  if (pathHasReparseComponent(path, &pathError))
-    return fail(L"reparse_path_admission", pathError);
-  PSECURITY_DESCRIPTOR sd = nullptr;
-  // Protected DACL: SYSTEM and the directory owner only; inheritable to children.
-  if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
-      L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;OW)", SDDL_REVISION_1, &sd, nullptr))
-    return fail(L"build_dacl");
-  SECURITY_ATTRIBUTES sa{};
-  sa.nLength = sizeof(sa);
-  sa.lpSecurityDescriptor = sd;
-  sa.bInheritHandle = FALSE;
-  BOOL created = CreateDirectoryW(path, &sa);
-  DWORD createError = created ? ERROR_SUCCESS : GetLastError();
-  LocalFree(sd);
-  if (!created) return fail(L"create_private_dir", createError);
+static NTSTATUS openRelative(
+    NtCreateFileFn ntCreateFile, HANDLE parent, const std::wstring& name,
+    ACCESS_MASK access, ULONG disposition, ULONG options,
+    PSECURITY_DESCRIPTOR security, HANDLE* output) {
+  UNICODE_STRING objectName{};
+  if (name.size() > 0x7fff) return static_cast<NTSTATUS>(0xC0000106L);
+  objectName.Buffer = const_cast<PWSTR>(name.c_str());
+  objectName.Length = static_cast<USHORT>(name.size() * sizeof(wchar_t));
+  objectName.MaximumLength = objectName.Length;
+  OBJECT_ATTRIBUTES attributes{};
+  attributes.Length = sizeof(attributes);
+  attributes.RootDirectory = parent;
+  attributes.ObjectName = &objectName;
+  attributes.Attributes = OBJ_CASE_INSENSITIVE;
+  attributes.SecurityDescriptor = security;
+  IO_STATUS_BLOCK io{};
+  return ntCreateFile(output, access, &attributes, &io, nullptr,
+      FILE_ATTRIBUTE_DIRECTORY,
+      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+      disposition, options, nullptr, 0);
+}
 
-  PACL dacl = nullptr;
-  PSECURITY_DESCRIPTOR check = nullptr;
-  DWORD e = GetNamedSecurityInfoW(const_cast<LPWSTR>(path), SE_FILE_OBJECT,
-      DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-      nullptr, nullptr, &dacl, nullptr, &check);
-  if (e != ERROR_SUCCESS) {
-    RemoveDirectoryW(path);
-    return fail(L"verify_dacl", e);
+static bool isNotReparseDirectory(HANDLE handle, DWORD* errorOut) {
+  FILE_ATTRIBUTE_TAG_INFO info{};
+  if (!GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &info, sizeof(info))) {
+    *errorOut = GetLastError();
+    return false;
   }
-  SECURITY_DESCRIPTOR_CONTROL control{};
-  DWORD revision = 0;
-  BOOL gotControl = GetSecurityDescriptorControl(check, &control, &revision);
-  bool protectedDacl = gotControl && (control & SE_DACL_PROTECTED) != 0;
-  bool hasSystem = false, hasOwnerRights = false;
-  bool exactAcl = dacl != nullptr && dacl->AceCount == 2;
-  if (dacl) {
-    for (DWORD i = 0; i < dacl->AceCount; ++i) {
-      void* raw = nullptr;
-      if (!GetAce(dacl, i, &raw)) {
-        exactAcl = false;
-        continue;
-      }
-      auto* header = static_cast<ACE_HEADER*>(raw);
-      if (header->AceType != ACCESS_ALLOWED_ACE_TYPE ||
-          header->AceFlags != (OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE)) {
-        exactAcl = false;
-        continue;
-      }
-      auto* ace = static_cast<ACCESS_ALLOWED_ACE*>(raw);
-      if (ace->Mask != FILE_ALL_ACCESS) exactAcl = false;
-      PSID sid = reinterpret_cast<PSID>(&ace->SidStart);
-      if (IsWellKnownSid(sid, WinLocalSystemSid)) {
-        if (hasSystem) exactAcl = false;
-        hasSystem = true;
-      }
-      LPWSTR sidString = nullptr;
-      if (ConvertSidToStringSidW(sid, &sidString)) {
-        // S-1-3-4 is OWNER RIGHTS.
-        if (wcscmp(sidString, L"S-1-3-4") == 0) {
-          if (hasOwnerRights) exactAcl = false;
-          hasOwnerRights = true;
-        }
-        LocalFree(sidString);
-      }
+  if ((info.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 ||
+      (info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+    *errorOut = ERROR_CANT_ACCESS_FILE;
+    return false;
+  }
+  *errorOut = ERROR_SUCCESS;
+  return true;
+}
+
+static int createPrivateDir(const wchar_t* inputPath) {
+  auto ntCreateFile = reinterpret_cast<NtCreateFileFn>(
+    GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "NtCreateFile"));
+  if (!ntCreateFile) return fail(L"resolve_nt_create_file", ERROR_PROC_NOT_FOUND);
+
+  DWORD needed = GetFullPathNameW(inputPath, 0, nullptr, nullptr);
+  if (needed == 0) return fail(L"resolve_private_path");
+  std::vector<wchar_t> buffer(needed + 1);
+  DWORD length = GetFullPathNameW(inputPath, static_cast<DWORD>(buffer.size()), buffer.data(), nullptr);
+  if (length == 0 || length >= buffer.size())
+    return fail(L"resolve_private_path", length == 0 ? GetLastError() : ERROR_FILENAME_EXCED_RANGE);
+  std::wstring full(buffer.data(), length);
+  if (full.size() < 4 || full[1] != L':' ||
+      (full[2] != L'\\' && full[2] != L'/') ||
+      full.rfind(L"\\\\", 0) == 0)
+    return fail(L"unsupported_private_path", ERROR_INVALID_NAME);
+
+  // Do not accept alternate namespaces or device paths after normalization.
+  std::wstring nativeRoot = L"\\??\\";
+  nativeRoot.push_back(full[0]);
+  nativeRoot += L":\\";
+  HANDLE current = INVALID_HANDLE_VALUE;
+  NTSTATUS status = openRelative(ntCreateFile, nullptr, nativeRoot,
+      FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | FILE_TRAVERSE | SYNCHRONIZE,
+      FILE_OPEN, FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT,
+      nullptr, &current);
+  if (status < 0) return fail(L"open_volume_root", ntError(status));
+
+  PSECURITY_DESCRIPTOR sd = nullptr;
+  if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
+      L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;OW)", SDDL_REVISION_1, &sd, nullptr)) {
+    DWORD e = GetLastError();
+    CloseHandle(current);
+    return fail(L"build_dacl", e);
+  }
+
+  size_t pos = 3;
+  while (pos < full.size()) {
+    while (pos < full.size() && (full[pos] == L'\\' || full[pos] == L'/')) ++pos;
+    if (pos >= full.size()) break;
+    size_t next = full.find_first_of(L"\\/", pos);
+    if (next == std::wstring::npos) next = full.size();
+    std::wstring component = full.substr(pos, next - pos);
+    pos = next;
+    if (component.empty() || component == L"." || component == L"..") {
+      LocalFree(sd);
+      CloseHandle(current);
+      return fail(L"invalid_path_component", ERROR_INVALID_NAME);
     }
+    const bool final = pos >= full.size();
+    HANDLE child = INVALID_HANDLE_VALUE;
+    if (final) {
+      status = openRelative(ntCreateFile, current, component,
+          READ_CONTROL | FILE_READ_ATTRIBUTES | FILE_WRITE_DAC | DELETE | SYNCHRONIZE,
+          FILE_CREATE,
+          FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT,
+          sd, &child);
+      if (status < 0) {
+        DWORD e = ntError(status);
+        LocalFree(sd);
+        CloseHandle(current);
+        return fail(L"create_private_dir_relative", e);
+      }
+      DWORD attrError = ERROR_SUCCESS;
+      if (!isNotReparseDirectory(child, &attrError)) {
+        FILE_DISPOSITION_INFO disposition{ TRUE };
+        SetFileInformationByHandle(child, FileDispositionInfo, &disposition, sizeof(disposition));
+        CloseHandle(child);
+        LocalFree(sd);
+        CloseHandle(current);
+        return fail(L"verify_created_directory_handle", attrError);
+      }
+
+      PACL dacl = nullptr;
+      PSECURITY_DESCRIPTOR check = nullptr;
+      DWORD e = GetSecurityInfo(child, SE_FILE_OBJECT,
+          DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+          nullptr, nullptr, &dacl, nullptr, &check);
+      if (e != ERROR_SUCCESS) {
+        FILE_DISPOSITION_INFO disposition{ TRUE };
+        SetFileInformationByHandle(child, FileDispositionInfo, &disposition, sizeof(disposition));
+        CloseHandle(child);
+        LocalFree(sd);
+        CloseHandle(current);
+        return fail(L"verify_dacl", e);
+      }
+      SECURITY_DESCRIPTOR_CONTROL control{};
+      DWORD revision = 0;
+      BOOL gotControl = GetSecurityDescriptorControl(check, &control, &revision);
+      bool protectedDacl = gotControl && (control & SE_DACL_PROTECTED) != 0;
+      bool hasSystem = false, hasOwnerRights = false;
+      bool exactAcl = dacl != nullptr && dacl->AceCount == 2;
+      if (dacl) {
+        for (DWORD i = 0; i < dacl->AceCount; ++i) {
+          void* raw = nullptr;
+          if (!GetAce(dacl, i, &raw)) { exactAcl = false; continue; }
+          auto* header = static_cast<ACE_HEADER*>(raw);
+          if (header->AceType != ACCESS_ALLOWED_ACE_TYPE ||
+              header->AceFlags != (OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE)) {
+            exactAcl = false;
+            continue;
+          }
+          auto* ace = static_cast<ACCESS_ALLOWED_ACE*>(raw);
+          if (ace->Mask != FILE_ALL_ACCESS) exactAcl = false;
+          PSID sid = reinterpret_cast<PSID>(&ace->SidStart);
+          if (IsWellKnownSid(sid, WinLocalSystemSid)) {
+            if (hasSystem) exactAcl = false;
+            hasSystem = true;
+          }
+          LPWSTR sidString = nullptr;
+          if (ConvertSidToStringSidW(sid, &sidString)) {
+            if (wcscmp(sidString, L"S-1-3-4") == 0) {
+              if (hasOwnerRights) exactAcl = false;
+              hasOwnerRights = true;
+            }
+            LocalFree(sidString);
+          }
+        }
+      }
+      LocalFree(check);
+      LocalFree(sd);
+      CloseHandle(current);
+      if (!protectedDacl || !exactAcl || !hasSystem || !hasOwnerRights) {
+        FILE_DISPOSITION_INFO disposition{ TRUE };
+        SetFileInformationByHandle(child, FileDispositionInfo, &disposition, sizeof(disposition));
+        CloseHandle(child);
+        return fail(L"verify_dacl_contents", ERROR_ACCESS_DENIED);
+      }
+      CloseHandle(child);
+      std::wcout << L"{\"ok\":true,\"operation\":\"create-private-dir\",\"dacl\":\"verified-protected\",\"path_admission\":\"handle-relative-no-reparse\"}\n";
+      return 0;
+    }
+
+    status = openRelative(ntCreateFile, current, component,
+        FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | FILE_TRAVERSE | SYNCHRONIZE,
+        FILE_OPEN,
+        FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT,
+        nullptr, &child);
+    if (status < 0) {
+      DWORD e = ntError(status);
+      LocalFree(sd);
+      CloseHandle(current);
+      return fail(L"open_parent_component", e);
+    }
+    DWORD attrError = ERROR_SUCCESS;
+    if (!isNotReparseDirectory(child, &attrError)) {
+      CloseHandle(child);
+      LocalFree(sd);
+      CloseHandle(current);
+      return fail(L"reject_parent_reparse_component", attrError);
+    }
+    CloseHandle(current);
+    current = child;
   }
-  if (check) LocalFree(check);
-  if (!protectedDacl || !exactAcl || !hasSystem || !hasOwnerRights) {
-    RemoveDirectoryW(path);
-    return fail(L"verify_dacl_contents", ERROR_ACCESS_DENIED);
-  }
-  std::wcout << L"{\"ok\":true,\"operation\":\"create-private-dir\",\"dacl\":\"verified-protected\"}\n";
-  return 0;
+
+  LocalFree(sd);
+  CloseHandle(current);
+  return fail(L"missing_final_component", ERROR_INVALID_NAME);
 }
 
 static int runInJob(int argc, wchar_t** argv) {
