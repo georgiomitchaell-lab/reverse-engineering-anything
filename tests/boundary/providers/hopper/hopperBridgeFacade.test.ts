@@ -95,15 +95,11 @@ const probeResultSchema = z.strictObject({
 
 describe("Hopper API facade", () => {
   it("imports without Hopper globals and gates exhaustive work during analysis", async () => {
-    const { stdout } = await execute(
-      "python3",
-      [probePath, bridgePath],
-      {
-        encoding: "utf8",
-        timeout: 3_000,
-        maxBuffer: 1_024 * 1_024,
-      },
-    );
+    const { stdout } = await execute("python3", [probePath, bridgePath], {
+      encoding: "utf8",
+      timeout: 3_000,
+      maxBuffer: 1_024 * 1_024,
+    });
     const result = probeResultSchema.parse(JSON.parse(stdout));
     expect(result.provider_faults.map((reply) => reply.error.message)).toEqual([
       "TypeError: Hopper bridge operation failed",
