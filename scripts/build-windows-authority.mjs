@@ -27,7 +27,7 @@ const compilerArgs = [
   "/EHsc",
   "/W4",
   source,
-  `/Fo${outputDirectory}\\`,
+  `/Fo${join(outputDirectory, "rea_windows_authority.obj")}`,
   `/Fe:${output}`,
   "/link",
   "advapi32.lib",
