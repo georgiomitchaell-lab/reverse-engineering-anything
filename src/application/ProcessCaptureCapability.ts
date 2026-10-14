@@ -1,4 +1,5 @@
 import { tmpdir } from "node:os";
+import { windowsNativeCapabilities } from "../process/WindowsAuthority.js";
 
 export type ProcessCaptureCapability =
   | { readonly available: true; readonly backend: "node-pty" }
@@ -11,6 +12,16 @@ export type ProcessCaptureCapability =
 /** Probe the actual native PTY seam instead of inferring support from the OS name. */
 export const probeProcessCaptureCapability =
   async (): Promise<ProcessCaptureCapability> => {
+    if (process.platform === "win32") {
+      const capability = windowsNativeCapabilities("win32").job_object_process_ownership;
+      if (!capability.available) {
+        return {
+          available: false,
+          backend: "node-pty",
+          reason: capability.reason,
+        };
+      }
+    }
     try {
       const { spawn } = await import("@lydell/node-pty");
       const terminal = spawn(
