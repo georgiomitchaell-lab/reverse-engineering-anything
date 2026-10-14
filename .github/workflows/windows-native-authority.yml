@@ -1,0 +1,47 @@
+name: Windows native authority
+
+on:
+  pull_request:
+    paths:
+      - "native/windows/**"
+      - "scripts/build-windows-authority.mjs"
+      - "scripts/verify-windows-package.mjs"
+      - "src/process/WindowsAuthority.ts"
+      - "src/process/PrivateRuntimeRoot.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/windows-native-authority.yml"
+  push:
+    branches:
+      - main
+      - fix/windows-native-authority
+    paths:
+      - "native/windows/**"
+      - "scripts/build-windows-authority.mjs"
+      - "scripts/verify-windows-package.mjs"
+      - "src/process/WindowsAuthority.ts"
+      - "src/process/PrivateRuntimeRoot.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/windows-native-authority.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-package:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.19.0"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build native helper and verify installed package
+        run: npm run verify:package:windows

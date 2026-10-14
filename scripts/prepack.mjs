@@ -42,6 +42,10 @@ if (await pathExists(join(root, "src"))) {
   if (packageManagerPath === undefined)
     throw new Error("Prepack could not resolve the active package manager");
   run(process.execPath, [packageManagerPath, "run", "build:cached"]);
+  // build:cached cleans dist; regenerate the native authority afterward so
+  // Windows tarballs contain the exact helper compiled from this source.
+  if (process.platform === "win32")
+    run(process.execPath, [packageManagerPath, "run", "build:windows-native"]);
   run(process.execPath, ["scripts/generate-skill-metadata.mjs", "--check"]);
 } else {
   for (const path of [

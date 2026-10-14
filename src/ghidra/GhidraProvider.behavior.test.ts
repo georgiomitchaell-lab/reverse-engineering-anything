@@ -145,7 +145,9 @@ describe("Ghidra platform support", () => {
     expect(ghidra.inspectAvailability()).toMatchObject({
       status: "unavailable",
       code: "unsupported_host",
-      reason: expect.stringContaining("native authority is unavailable"),
+      reason: expect.stringContaining(
+        "Complete Windows isolation is not proven",
+      ),
       diagnostics: {
         windows_security: {
           job_object_process_ownership: expect.objectContaining({

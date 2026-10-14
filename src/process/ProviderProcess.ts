@@ -5,6 +5,7 @@ import type {
   OwnedProcessGroup,
   ProcessCleanupResult,
 } from "./ProcessOwnership.js";
+import { resolveWindowsNativeHelperPath } from "./WindowsNativeHelper.js";
 
 const DEFAULT_TERMINATION_GRACE_MS = 250;
 const DEFAULT_KILL_GRACE_MS = 1_000;
@@ -14,7 +15,9 @@ export interface OwnedProviderProcessSpawnOptions {
   readonly command: string;
   readonly arguments: readonly string[];
   readonly runId: string;
-  /** Null disables argv-prefix matching for interpreter-driven launch scripts. */
+  /**
+   * Null disables argv-prefix matching for interpreter-driven launch scripts.
+   */
   readonly expectedCommand?: string | null;
   /** Preserve a pre-quoted Windows command-interpreter invocation exactly. */
   readonly windowsVerbatimArguments?: boolean;
@@ -22,7 +25,9 @@ export interface OwnedProviderProcessSpawnOptions {
   readonly env?: NodeJS.ProcessEnv;
 }
 
-/** Spawned process paired with the identity proof required for group cleanup. */
+/**
+ * Spawned process paired with the identity proof required for group cleanup.
+ */
 export interface SpawnedOwnedProviderProcess {
   readonly process: ChildProcess;
   readonly ownership: OwnedProcessGroup;
@@ -57,7 +62,9 @@ export interface ProviderProcessSnapshot {
   readonly signal: NodeJS.Signals | null | undefined;
 }
 
-/** Resource-safe events emitted without imposing provider protocol semantics. */
+/**
+ * Resource-safe events emitted without imposing provider protocol semantics.
+ */
 export type ProviderProcessDiagnostic =
   | {
       readonly type: "output";
@@ -106,12 +113,34 @@ export type ProviderProcessStopResult =
 export const spawnOwnedProviderProcess = async (
   options: OwnedProviderProcessSpawnOptions,
 ): Promise<SpawnedOwnedProviderProcess> => {
-  const child = spawn(options.command, [...options.arguments], {
+  // On Windows, use the explicitly configured helper or the helper adjacent
+  // to the compiled package. Source-tree tests must not discover dist/ helpers.
+  // The helper assigns the suspended child to a Job Object before resuming it.
+  const nativeAuthorityPath =
+    process.platform === "win32" ? resolveWindowsNativeHelperPath() : undefined;
+  const useWindowsJob =
+    typeof nativeAuthorityPath === "string" &&
+    nativeAuthorityPath.trim().length > 0;
+  const launchCommand = useWindowsJob ? nativeAuthorityPath! : options.command;
+  const launchArguments = useWindowsJob
+    ? [
+        "run-job",
+        "--parent-pid",
+        String(process.pid),
+        "--",
+        options.command,
+        ...options.arguments,
+      ]
+    : [...options.arguments];
+
+  const child = spawn(launchCommand, launchArguments, {
     shell: false,
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
     detached: process.platform !== "win32",
-    windowsVerbatimArguments: options.windowsVerbatimArguments ?? false,
+    windowsVerbatimArguments: useWindowsJob
+      ? false
+      : (options.windowsVerbatimArguments ?? false),
     env: {
       ...process.env,
       ...options.env,
@@ -129,7 +158,11 @@ export const spawnOwnedProviderProcess = async (
     expectedParentPid: process.pid,
     ...(options.expectedCommand === null
       ? {}
-      : { expectedCommand: options.expectedCommand ?? options.command }),
+      : {
+          expectedCommand: useWindowsJob
+            ? nativeAuthorityPath!
+            : (options.expectedCommand ?? options.command),
+        }),
   };
   return { process: child, ownership };
 };
@@ -216,7 +249,9 @@ export class ProviderProcessSupervisor {
     }
   }
 
-  /** Stop an owned process once; concurrent callers share the same escalation. */
+  /**
+   * Stop an owned process once; concurrent callers share the same escalation.
+   */
   stop(
     options: ProviderProcessStopOptions = {},
   ): Promise<ProviderProcessStopResult> {
@@ -224,7 +259,9 @@ export class ProviderProcessSupervisor {
     return this.#stopPromise;
   }
 
-  /** Detach capture and process listeners after an adapter releases ownership. */
+  /**
+   * Detach capture and process listeners after an adapter releases ownership.
+   */
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
