@@ -94,7 +94,9 @@ export class PrivateRuntimeRoot {
 const createWindowsPrivateRuntimeRoot = async (
   options: PrivateRuntimeRootOptions,
 ): Promise<string> => {
-  const configuredHelper = resolveWindowsNativeHelperPath();
+  const configuredHelper = resolveWindowsNativeHelperPath(
+    options.platform === undefined && process.platform === "win32",
+  );
   if (
     typeof configuredHelper !== "string" ||
     configuredHelper.trim().length === 0 ||
