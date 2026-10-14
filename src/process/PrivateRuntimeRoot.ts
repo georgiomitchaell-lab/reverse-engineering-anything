@@ -62,7 +62,10 @@ export class PrivateRuntimeRoot {
     options: PrivateRuntimeRootOptions = {},
   ): Promise<PrivateRuntimeRoot> {
     const platform = options.platform ?? process.platform;
-    if (platform === "win32") return createWindowsPrivateRuntimeRoot(options);
+    if (platform === "win32") {
+      const path = await createWindowsPrivateRuntimeRoot(options);
+      return new PrivateRuntimeRoot(path);
+    }
 
     const capability = privateRuntimeRootCapability(platform);
     if (!capability.available)
@@ -89,7 +92,7 @@ export class PrivateRuntimeRoot {
 /** Create a DACL-protected directory only through the verified native helper. */
 const createWindowsPrivateRuntimeRoot = async (
   options: PrivateRuntimeRootOptions,
-): Promise<PrivateRuntimeRoot> => {
+): Promise<string> => {
   const configuredHelper = process.env.REA_WINDOWS_AUTHORITY_PATH;
   if (
     typeof configuredHelper !== "string" ||
@@ -131,7 +134,7 @@ const createWindowsPrivateRuntimeRoot = async (
       "Windows native helper did not prove a protected private runtime DACL",
     );
   }
-  return new PrivateRuntimeRoot(path);
+  return path;
 };
 
 const runNativePrivateDirectoryCreation = (
