@@ -92,6 +92,8 @@ try {
     nativeHelper,
     [
       "run-job",
+      "--parent-pid",
+      String(process.pid),
       "--",
       process.env.ComSpec ?? "cmd.exe",
       "/d",
