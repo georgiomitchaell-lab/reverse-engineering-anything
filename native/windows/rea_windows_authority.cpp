@@ -366,9 +366,6 @@ static int runInJob(int argc, wchar_t** argv) {
   return static_cast<int>(exitCode);
 }
 
-int wmain(int argc, wchar_t** argv) {
-  if (argc == 3 && wcscmp(argv[1], L"create-private-dir") == 0)
-    return createPrivateDir(argv[2]);
 static int listJobPids(const wchar_t* jobName) {
   HANDLE job = OpenJobObjectW(JOB_OBJECT_QUERY, FALSE, jobName);
   if (!job) return fail(L"open_job_for_query");
@@ -433,6 +430,11 @@ static int listJobPids(const wchar_t* jobName) {
   CloseHandle(job);
   return 0;
 }
+
+
+int wmain(int argc, wchar_t** argv) {
+  if (argc == 3 && wcscmp(argv[1], L"create-private-dir") == 0)
+    return createPrivateDir(argv[2]);
 
   if (argc == 4 && wcscmp(argv[1], L"list-job-pids") == 0 &&
       wcscmp(argv[2], L"--job-name") == 0)
