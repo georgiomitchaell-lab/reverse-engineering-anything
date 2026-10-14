@@ -152,7 +152,7 @@ static int runInJob(int argc, wchar_t** argv) {
   mutableCommand.push_back(L'\0');
 
   // Crucial ordering: create suspended -> assign to Job Object -> resume.
-  if (!CreateProcessW(argv[3], mutableCommand.data(), nullptr, nullptr, TRUE,
+  if (!CreateProcessW(argv[5], mutableCommand.data(), nullptr, nullptr, TRUE,
       CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT, nullptr, nullptr, &si, &pi)) {
     DWORD e = GetLastError();
     CloseHandle(job); CloseHandle(parentProcess);
