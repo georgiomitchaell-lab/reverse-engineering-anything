@@ -67,7 +67,7 @@ export const createProductCatalog = async (root) => {
 
 /** Stable checked-in representation of the product catalog. */
 export const serializeProductCatalog = (catalog) =>
-  `${formatCatalogJson(catalog, 0, 0)}\\n`;
+  `${formatCatalogJson(catalog, 0, 0)}\n`;
 
 const formatCatalogJson = (value, indent, prefixLength = indent) => {
   if (value === null || typeof value !== "object")
@@ -83,16 +83,16 @@ const formatCatalogJson = (value, indent, prefixLength = indent) => {
       const inline = `[${value.map((item) => JSON.stringify(item)).join(", ")}]`;
       if (prefixLength + inline.length <= 80) return inline;
     }
-    return `[\\n${value
+    return `[\n${value
       .map(
         (item) =>
           `${" ".repeat(indent + 2)}${formatCatalogJson(item, indent + 2)}`,
       )
-      .join(",\\n")}\\n${" ".repeat(indent)}]`;
+      .join(",\n")}\n${" ".repeat(indent)}]`;
   }
   const entries = Object.entries(value);
   if (entries.length === 0) return "{}";
-  return `{\\n${entries
+  return `{\n${entries
     .map(([key, item]) => {
       const serializedKey = JSON.stringify(key);
       const itemPrefixLength = indent + 2 + serializedKey.length + 2;
@@ -102,5 +102,5 @@ const formatCatalogJson = (value, indent, prefixLength = indent) => {
         itemPrefixLength,
       )}`;
     })
-    .join(",\\n")}\\n${" ".repeat(indent)}}`;
+    .join(",\n")}\n${" ".repeat(indent)}}`;
 };
