@@ -15,7 +15,9 @@ export interface OwnedProviderProcessSpawnOptions {
   readonly command: string;
   readonly arguments: readonly string[];
   readonly runId: string;
-  /** Null disables argv-prefix matching for interpreter-driven launch scripts. */
+  /**
+   * Null disables argv-prefix matching for interpreter-driven launch scripts.
+   */
   readonly expectedCommand?: string | null;
   /** Preserve a pre-quoted Windows command-interpreter invocation exactly. */
   readonly windowsVerbatimArguments?: boolean;
@@ -23,7 +25,9 @@ export interface OwnedProviderProcessSpawnOptions {
   readonly env?: NodeJS.ProcessEnv;
 }
 
-/** Spawned process paired with the identity proof required for group cleanup. */
+/**
+ * Spawned process paired with the identity proof required for group cleanup.
+ */
 export interface SpawnedOwnedProviderProcess {
   readonly process: ChildProcess;
   readonly ownership: OwnedProcessGroup;
@@ -58,7 +62,9 @@ export interface ProviderProcessSnapshot {
   readonly signal: NodeJS.Signals | null | undefined;
 }
 
-/** Resource-safe events emitted without imposing provider protocol semantics. */
+/**
+ * Resource-safe events emitted without imposing provider protocol semantics.
+ */
 export type ProviderProcessDiagnostic =
   | {
       readonly type: "output";
@@ -113,10 +119,18 @@ export const spawnOwnedProviderProcess = async (
   const nativeAuthorityPath =
     process.platform === "win32" ? resolveWindowsNativeHelperPath() : undefined;
   const useWindowsJob =
-    typeof nativeAuthorityPath === "string" && nativeAuthorityPath.trim().length > 0;
+    typeof nativeAuthorityPath === "string" &&
+    nativeAuthorityPath.trim().length > 0;
   const launchCommand = useWindowsJob ? nativeAuthorityPath! : options.command;
   const launchArguments = useWindowsJob
-    ? ["run-job", "--parent-pid", String(process.pid), "--", options.command, ...options.arguments]
+    ? [
+        "run-job",
+        "--parent-pid",
+        String(process.pid),
+        "--",
+        options.command,
+        ...options.arguments,
+      ]
     : [...options.arguments];
 
   const child = spawn(launchCommand, launchArguments, {
@@ -235,7 +249,9 @@ export class ProviderProcessSupervisor {
     }
   }
 
-  /** Stop an owned process once; concurrent callers share the same escalation. */
+  /**
+   * Stop an owned process once; concurrent callers share the same escalation.
+   */
   stop(
     options: ProviderProcessStopOptions = {},
   ): Promise<ProviderProcessStopResult> {
@@ -243,7 +259,9 @@ export class ProviderProcessSupervisor {
     return this.#stopPromise;
   }
 
-  /** Detach capture and process listeners after an adapter releases ownership. */
+  /**
+   * Detach capture and process listeners after an adapter releases ownership.
+   */
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
