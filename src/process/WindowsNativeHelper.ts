@@ -20,17 +20,8 @@ export const resolveWindowsNativeHelperPath = (): string | undefined => {
     "windows",
     "rea_windows_authority.exe",
   );
-  if (existsSync(packaged)) return packaged;
-
-  // Source-tree test/dev execution uses src/process rather than dist/process.
-  const sourceTreeBuild = resolve(
-    moduleDirectory,
-    "..",
-    "..",
-    "dist",
-    "native",
-    "windows",
-    "rea_windows_authority.exe",
-  );
-  return existsSync(sourceTreeBuild) ? sourceTreeBuild : undefined;
+  // Only the installed/compiled module may activate the packaged helper.
+  // Do not discover dist/ from src/ during tests or source-tree development:
+  // that silently changes mocked process launches into native launches.
+  return existsSync(packaged) ? packaged : undefined;
 };
