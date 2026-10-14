@@ -146,7 +146,7 @@ static int createPrivateDir(const wchar_t* inputPath) {
     HANDLE child = INVALID_HANDLE_VALUE;
     if (final) {
       status = openRelative(ntCreateFile, current, component,
-          READ_CONTROL | FILE_READ_ATTRIBUTES | FILE_WRITE_DAC | DELETE | SYNCHRONIZE,
+          READ_CONTROL | FILE_READ_ATTRIBUTES | WRITE_DAC | DELETE | SYNCHRONIZE,
           kNtFileCreate,
           FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT,
           sd, &child);
