@@ -41,6 +41,7 @@ import {
   prepareProcessCapture,
   releaseProcessResources,
   resolveProcessResult,
+  terminateProcessTerminal,
   type PendingProcessCapture,
 } from "./ProcessCaptureLifecycle.js";
 import { assertNotCancelled } from "./ProcessCaptureAuthority.js";
@@ -83,7 +84,8 @@ const cleanupFailedStartup = async (options: {
   readonly runId: string;
   readonly temporaryRoot: string;
 }): Promise<never> => {
-  options.terminal?.kill("SIGKILL");
+  if (options.terminal !== undefined)
+    terminateProcessTerminal(options.terminal, "SIGKILL");
   const cleanupFailure = await releaseProcessResources({
     ...options,
     capturedProcessGroupIds:
