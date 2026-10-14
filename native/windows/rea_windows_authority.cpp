@@ -1,6 +1,7 @@
 #define UNICODE
 #define _UNICODE
 #include <windows.h>
+#include <winternl.h>
 #include <aclapi.h>
 #include <sddl.h>
 #include <string>
