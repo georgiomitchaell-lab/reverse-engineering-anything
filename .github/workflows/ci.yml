@@ -351,7 +351,7 @@ jobs:
         shell: pwsh
         run: |
           $env:REA_WINDOWS_AUTHORITY_PATH = Join-Path $PWD "dist\native\windows\rea_windows_authority.exe"
-          npx vitest run --coverage.enabled=false tests/boundary/process/processCaptureLifecycle.test.ts -t "terminates a Windows PTY|preserves the requested signal|distinguishes timeout from cancellation and cleans both runs"
+          npm run test:windows-pty
       - uses: actions/upload-artifact@v4
         if: always()
         with:
