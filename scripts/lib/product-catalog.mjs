@@ -75,8 +75,7 @@ const formatCatalogJson = (value, indent, prefixLength = indent) => {
     if (value.length === 0) return "[]";
     const primitiveItems = value.every(
       (item) =>
-        item === null ||
-        ["string", "number", "boolean"].includes(typeof item),
+        item === null || ["string", "number", "boolean"].includes(typeof item),
     );
     if (primitiveItems) {
       const inlineItems = value.map((item) => JSON.stringify(item));
