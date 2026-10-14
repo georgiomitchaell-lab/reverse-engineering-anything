@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFile } from "node:child_process";
-import { access, mkdtemp, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -98,7 +98,7 @@ try {
   const junctionTarget = join(workspace, "junction-target");
   const junctionPath = join(workspace, "junction-parent");
   const junctionProbe = join(junctionPath, "must-not-be-created");
-  await import("node:fs/promises").then(({ mkdir }) => mkdir(junctionTarget));
+  await mkdir(junctionTarget);
   const junction = await exec(
     process.env.ComSpec ?? "cmd.exe",
     ["/d", "/c", "mklink", "/J", junctionPath, junctionTarget],
@@ -127,9 +127,7 @@ try {
       "Packaged native helper followed a junction parent component",
     );
   try {
-    await import("node:fs/promises").then(({ access }) =>
-      access(junctionProbe),
-    );
+    await access(junctionProbe);
     throw new Error(
       "Native helper unexpectedly created a directory through a junction",
     );
