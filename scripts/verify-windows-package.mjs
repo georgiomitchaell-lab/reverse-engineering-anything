@@ -232,10 +232,10 @@ try {
   const batchCapture = join(batchDirectory, "launch capture.txt");
   await writeFile(
     batchScript,
-    \`@echo off\r\n> "\${batchCapture}" echo REA_BATCH_JOB_OK\r\n\`,
+    `@echo off\r\n> "${batchCapture}" echo REA_BATCH_JOB_OK\r\n`,
     "utf8",
   );
-  const batchInvocation = \`""\${batchScript}""\`;
+  const batchInvocation = `""${batchScript}""`;
   await exec(
     nativeHelper,
     [
