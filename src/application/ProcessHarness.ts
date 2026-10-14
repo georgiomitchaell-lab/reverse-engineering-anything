@@ -506,7 +506,8 @@ const runProcessScenario = async (
       ...(signal === undefined ? {} : { signal }),
     });
   } catch (cause: unknown) {
-    runtime?.terminal.kill("SIGKILL");
+    if (runtime !== undefined)
+      terminateProcessTerminal(runtime.terminal, "SIGKILL");
     executionFailure = cause;
   }
   return finishProcessRun({
