@@ -1,5 +1,19 @@
 # Changelog
 
+## [4.0.2](https://github.com/georgiomitchaell-lab/reverse-engineering-anything/compare/rea-agents-4.0.1...rea-agents-4.0.2) (2026-10-14)
+
+
+### Bug Fixes
+
+* **windows:** avoid duplicate ConPTY termination on cancellation ([7c8a841](https://github.com/georgiomitchaell-lab/reverse-engineering-anything/commit/7c8a8414d252a46d10aa6d04ac1326d1fb29d0bf))
+* **windows:** avoid node-pty beta.15 PTY regression ([816da10](https://github.com/georgiomitchaell-lab/reverse-engineering-anything/commit/816da10f384ff4a7a15113fc6e37788b45a63d8e))
+* **windows:** defer PTY termination until startup completes ([aab809c](https://github.com/georgiomitchaell-lab/reverse-engineering-anything/commit/aab809c34059e7eccd2e830b5659084c32a4d084))
+* **windows:** preserve verbatim cmd arguments through Job Objects ([4ddcddd](https://github.com/georgiomitchaell-lab/reverse-engineering-anything/commit/4ddcdddfb52b53959a126ac2f0f1003052fd0c75))
+* **windows:** terminate PTYs without unsupported signal arguments ([f50a012](https://github.com/georgiomitchaell-lab/reverse-engineering-anything/commit/f50a012cb0faa7505b134d5fd2fb9993a1265861))
+* **windows:** update node-pty console agent ([94ae25b](https://github.com/georgiomitchaell-lab/reverse-engineering-anything/commit/94ae25bb9f2733631dc8cb5c86f6eb37b75bb03b))
+* **windows:** use safe ConPTY teardown for process capture ([ff06112](https://github.com/georgiomitchaell-lab/reverse-engineering-anything/commit/ff0611291b26b1f47351540a3f4caf53ef44629e))
+* **windows:** validate platform-aware test runner and PTY cleanup ([9080cc0](https://github.com/georgiomitchaell-lab/reverse-engineering-anything/commit/9080cc0a734335fdd504d8b1d119f534c65b8f36))
+
 ## [4.0.1](https://github.com/georgiomitchaell-lab/reverse-engineering-anything/compare/rea-agents-4.0.0...rea-agents-4.0.1) (2026-10-14)
 
 
