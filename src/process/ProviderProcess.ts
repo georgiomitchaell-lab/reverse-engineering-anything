@@ -128,6 +128,9 @@ export const spawnOwnedProviderProcess = async (
         "--parent-pid",
         String(process.pid),
         "--",
+        ...(options.windowsVerbatimArguments === true
+          ? ["--windows-verbatim-arguments"]
+          : []),
         options.command,
         ...options.arguments,
       ]
