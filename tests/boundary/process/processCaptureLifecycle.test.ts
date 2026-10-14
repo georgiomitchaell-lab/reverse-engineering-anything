@@ -26,6 +26,11 @@ const processFixture = fileURLToPath(
 );
 const execFileAsync = promisify(execFile);
 
+interface TestPtyExit {
+  readonly exitCode: number;
+  readonly signal?: number;
+}
+
 it("terminates a Windows PTY without passing an unsupported POSIX signal", () => {
   const kill = vi.fn();
   terminateProcessTerminal({ kill }, "SIGKILL", "win32");
@@ -43,21 +48,14 @@ it.skipIf(process.platform !== "win32")(
   "defers termination until Windows PTY is ready",
   async () => {
     let pid = 0;
-    let onExit:
-      | ((event: { readonly exitCode: number; readonly signal?: number }) => void)
-      | undefined;
+    let onExit: ((event: TestPtyExit) => void) | undefined;
     const kill = vi.fn();
     const terminal = {
       get pid() {
         return pid;
       },
       kill,
-      onExit: (
-        listener: (event: {
-          readonly exitCode: number;
-          readonly signal?: number;
-        }) => void,
-      ) => {
+      onExit: (listener: (event: TestPtyExit) => void) => {
         onExit = listener;
       },
     };
