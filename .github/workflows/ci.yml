@@ -350,7 +350,6 @@ jobs:
       - name: Run Windows PTY timeout and cancellation regressions
         shell: pwsh
         run: |
-          $env:REA_WINDOWS_AUTHORITY_PATH = Join-Path $PWD "dist\native\windows\rea_windows_authority.exe"
           npm run test:windows-pty
       - uses: actions/upload-artifact@v4
         if: always()
