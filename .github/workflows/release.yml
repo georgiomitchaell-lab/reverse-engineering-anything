@@ -8,7 +8,7 @@ env:
   HUSKY: "0"
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.run_id }}
   cancel-in-progress: true
 
 jobs:
