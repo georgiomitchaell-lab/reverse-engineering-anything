@@ -6,6 +6,7 @@
 #include <sddl.h>
 #include <string>
 #include <vector>
+#include <utility>
 #include <iostream>
 #include <tlhelp32.h>
 #include <cstddef>
@@ -263,8 +264,8 @@ static int runInJob(int argc, wchar_t** argv) {
       wcscmp(argv[2], L"--parent-pid") != 0 ||
       (named && wcscmp(argv[4], L"--job-name") != 0) ||
       wcscmp(argv[separatorIndex], L"--") != 0) {
-    std::wcerr << L"Usage: rea_windows_authority.exe run-job --parent-pid <pid> -- <exe> [args...]\\n"
-               << L"   or: rea_windows_authority.exe run-job-named --parent-pid <pid> --job-name <name> -- <exe> [args...]\\n";
+    std::wcerr << L"Usage: rea_windows_authority.exe run-job --parent-pid <pid> -- <exe> [args...]\n"
+               << L"   or: rea_windows_authority.exe run-job-named --parent-pid <pid> --job-name <name> -- <exe> [args...]\n";
     return 2;
   }
   const std::wstring jobName = named ? argv[5] : L"";
