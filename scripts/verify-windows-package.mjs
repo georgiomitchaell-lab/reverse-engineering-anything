@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { access, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { Client } from "@modelcontextprotocol/client";
@@ -13,8 +15,52 @@ import { verifyCompleteToolCatalog } from "./lib/verify-package-core.mjs";
 import { completeVerifierRun, createVerifierRun } from "./lib/verifier-run.mjs";
 
 const exec = promisify(execFile);
-const verifierRun = createVerifierRun();
 const root = process.cwd();
+
+// The verifier itself must be placed in a dedicated native Job Object before
+// it starts any work, so every descendant can be attested by job membership.
+if (
+  process.platform === "win32" &&
+  process.env.REA_WINDOWS_VERIFIER_JOB_NAME === undefined
+) {
+  const helper = join(root, "dist", "native", "windows", "rea_windows_authority.exe");
+  const jobName = `Local\\REA-Verifier-${randomUUID()}`;
+  const child = spawn(
+    helper,
+    [
+      "run-job-named",
+      "--parent-pid",
+      String(process.pid),
+      "--job-name",
+      jobName,
+      "--",
+      process.execPath,
+      fileURLToPath(import.meta.url),
+    ],
+    {
+      env: { ...process.env, REA_WINDOWS_VERIFIER_JOB_NAME: jobName },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    },
+  );
+  const stdout = [];
+  const stderr = [];
+  child.stdout.on("data", (chunk) => stdout.push(chunk));
+  child.stderr.on("data", (chunk) => stderr.push(chunk));
+  const code = await new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", resolve);
+  });
+  await new Promise((resolve) =>
+    process.stdout.write(Buffer.concat(stdout), resolve),
+  );
+  await new Promise((resolve) =>
+    process.stderr.write(Buffer.concat(stderr), resolve),
+  );
+  process.exit(code ?? 1);
+}
+
+const verifierRun = createVerifierRun();
 const workspace = await mkdtemp(join(tmpdir(), "rea-windows-package-"));
 const prefix = join(workspace, "prefix");
 
