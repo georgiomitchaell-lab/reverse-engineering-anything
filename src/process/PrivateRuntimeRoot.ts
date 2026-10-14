@@ -3,6 +3,7 @@ import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { resolveWindowsNativeHelperPath } from "./WindowsNativeHelper.js";
 
 import {
   windowsNativeCapabilities,
@@ -93,7 +94,7 @@ export class PrivateRuntimeRoot {
 const createWindowsPrivateRuntimeRoot = async (
   options: PrivateRuntimeRootOptions,
 ): Promise<string> => {
-  const configuredHelper = process.env.REA_WINDOWS_AUTHORITY_PATH;
+  const configuredHelper = resolveWindowsNativeHelperPath();
   if (
     typeof configuredHelper !== "string" ||
     configuredHelper.trim().length === 0 ||
