@@ -90,7 +90,9 @@ export class PrivateRuntimeRoot {
   }
 }
 
-/** Create a DACL-protected directory only through the verified native helper. */
+/**
+ * Create a DACL-protected directory only through the verified native helper.
+ */
 const createWindowsPrivateRuntimeRoot = async (
   options: PrivateRuntimeRootOptions,
 ): Promise<string> => {
@@ -153,7 +155,8 @@ const runNativePrivateDirectoryCreation = (
         if (error) {
           reject(
             new PrivateRuntimeRootUnavailableError(
-              stderr.trim() || `Windows native DACL creation failed: ${error.message}`,
+              stderr.trim() ||
+                `Windows native DACL creation failed: ${error.message}`,
             ),
           );
           return;
