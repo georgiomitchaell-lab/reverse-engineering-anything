@@ -2,7 +2,7 @@
 
 import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { access, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { access, copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,7 +23,14 @@ if (
   process.platform === "win32" &&
   process.env.REA_WINDOWS_VERIFIER_JOB_NAME === undefined
 ) {
-  const helper = join(root, "dist", "native", "windows", "rea_windows_authority.exe");
+  const launcherDirectory = await mkdtemp(
+    join(tmpdir(), "rea-windows-verifier-launcher-"),
+  );
+  const helper = join(launcherDirectory, "rea_windows_authority.exe");
+  await copyFile(
+    join(root, "dist", "native", "windows", "rea_windows_authority.exe"),
+    helper,
+  );
   const jobName = `Local\\REA-Verifier-${randomUUID()}`;
   const child = spawn(
     helper,
@@ -57,6 +64,7 @@ if (
   await new Promise((resolve) =>
     process.stderr.write(Buffer.concat(stderr), resolve),
   );
+  await rm(launcherDirectory, { recursive: true, force: true });
   process.exit(code ?? 1);
 }
 
