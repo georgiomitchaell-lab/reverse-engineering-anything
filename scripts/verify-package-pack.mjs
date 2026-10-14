@@ -1,12 +1,23 @@
 import { join } from "node:path";
+import process from "node:process";
 
 import { exec } from "./lib/verify-package-core.mjs";
 import { verifyPackedBridge } from "./verify-packed-bridge.mjs";
 
 /** Create a tarball and assert production packaging constraints. */
 export async function verifyPackagePack({ root, workspace }) {
+  const npmCli = process.env.npm_execpath;
+  const packCommand = npmCli
+    ? process.execPath
+    : process.platform === "win32"
+      ? "npm.cmd"
+      : "npm";
+  const packArgs = npmCli ? [npmCli, "pack", "--silent"] : ["pack", "--silent"];
   const tarball = (
-    await exec("npm", ["pack", "--silent"], { cwd: root })
+    await exec(packCommand, packArgs, {
+      cwd: root,
+      shell: process.platform === "win32" && !npmCli,
+    })
   ).stdout.trim();
   const packedFiles = (
     await exec("tar", ["-tf", join(root, tarball)])
