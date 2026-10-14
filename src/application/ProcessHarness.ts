@@ -506,7 +506,13 @@ const runProcessScenario = async (
       ...(signal === undefined ? {} : { signal }),
     });
   } catch (cause: unknown) {
-    runtime?.terminal.kill("SIGKILL");
+    // Cancellation is raised only after awaitTerminalExit observes the PTY exit.
+    // Do not kill the Windows ConPTY a second time: its console-list agent can
+    // race a second teardown and emit an uncaught AttachConsole failure.
+    const cancelledAfterExit =
+      cause instanceof ProcessCaptureError && cause.reason === "cancelled";
+    if (runtime !== undefined && !cancelledAfterExit)
+      terminateProcessTerminal(runtime.terminal, "SIGKILL");
     executionFailure = cause;
   }
   return finishProcessRun({
