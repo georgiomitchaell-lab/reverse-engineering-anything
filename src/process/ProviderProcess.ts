@@ -114,7 +114,7 @@ export const spawnOwnedProviderProcess = async (
     process.platform === "win32" ? process.env.REA_WINDOWS_AUTHORITY_PATH : undefined;
   const useWindowsJob =
     typeof nativeAuthorityPath === "string" && nativeAuthorityPath.trim().length > 0;
-  const launchCommand = useWindowsJob ? nativeAuthorityPath : options.command;
+  const launchCommand = useWindowsJob ? nativeAuthorityPath! : options.command;
   const launchArguments = useWindowsJob
     ? ["run-job", "--", options.command, ...options.arguments]
     : [...options.arguments];
@@ -146,7 +146,7 @@ export const spawnOwnedProviderProcess = async (
       ? {}
       : {
           expectedCommand: useWindowsJob
-            ? nativeAuthorityPath
+            ? nativeAuthorityPath!
             : (options.expectedCommand ?? options.command),
         }),
   };
