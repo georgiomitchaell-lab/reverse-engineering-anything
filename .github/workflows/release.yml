@@ -112,6 +112,8 @@ jobs:
             exit 1
           fi
           tag="rea-agents-$version"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch --tags
           if ! git rev-parse --verify "refs/tags/$tag" >/dev/null 2>&1; then
             git tag -a "$tag" "$GITHUB_SHA" -m "rea-agents $version"
