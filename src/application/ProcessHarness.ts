@@ -206,6 +206,7 @@ const startCaptureRuntime = async (
       cols: scenario.terminal.columns,
       rows: scenario.terminal.rows,
       name: "xterm-256color",
+      ...(process.platform === "win32" ? { useConptyDll: true } : {}),
     });
     const framesTruncated = captureTerminalFrames({
       ...options,
