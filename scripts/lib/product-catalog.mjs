@@ -1,4 +1,6 @@
-import { format } from "prettier";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { format, resolveConfig } from "prettier";
 
 import { assertSameNames, digest, loadSources } from "./catalog-core.mjs";
 import {
@@ -66,5 +68,18 @@ export const createProductCatalog = async (root) => {
 };
 
 /** Stable checked-in representation of the product catalog. */
-export const serializeProductCatalog = (catalog) =>
-  format(JSON.stringify(catalog), { parser: "json" });
+export const serializeProductCatalog = async (catalog) => {
+  const filepath = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "..",
+    "docs",
+    "product-catalog.json",
+  );
+  const config = await resolveConfig(filepath);
+  return format(JSON.stringify(catalog), {
+    ...config,
+    filepath,
+    parser: "json",
+  });
+};
