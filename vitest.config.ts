@@ -81,7 +81,8 @@ const TEST_PROJECTS = [
     // The native PTY cancellation regression can terminate a Vitest fork on Windows.
     // Run that platform-specific process boundary in a worker thread on Windows;
     // keep isolated fork workers on POSIX, where process-group tests require them.
-    pool: process.platform === "win32" ? ("threads" as const) : ("forks" as const),
+    pool:
+      process.platform === "win32" ? ("threads" as const) : ("forks" as const),
     maxWorkers: MAX_TEST_WORKERS,
     fileParallelism: false,
   },
