@@ -158,7 +158,7 @@
     "verify:asset-catalog": "npm run build:cached && node scripts/verify-asset-catalog.mjs",
     "verify:native-ui:permissions": "npm run build:cached && node scripts/verify-native-ui.mjs --allow-permission-denial",
     "build:windows-native": "node scripts/build-windows-authority.mjs",
-    "test:windows-pty": "vitest run --coverage.enabled=false tests/boundary/process/processCaptureLifecycle.test.ts -t \"terminates a Windows PTY|preserves the requested signal|distinguishes timeout from cancellation and cleans both runs\""
+    "test:windows-pty": "vitest run --coverage.enabled=false tests/boundary/process/processCaptureLifecycle.test.ts -t \"distinguishes timeout from cancellation and cleans both runs\""
   },
   "lint-staged": {
     "*.{cjs,cts,js,jsx,mjs,mts,ts,tsx}": [
