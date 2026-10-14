@@ -90,7 +90,7 @@ try {
 
   if (daclResult?.path_admission !== "handle-relative-no-reparse")
     throw new Error(
-      "Packaged native helper did not attest handle-relative no-reparse admission",
+      "Packaged helper did not attest handle-relative path admission",
     );
 
   // A junction is an unprivileged Windows reparse-point fixture. The helper
