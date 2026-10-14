@@ -255,6 +255,11 @@ def is_wsl() -> bool:
 
 
 def socket_directory_state() -> tuple[str | None, bool | None, bool]:
+    # This adapter implements a Linux X11 private-display strategy. If invoked
+    # for diagnostics on Windows, report that the Linux socket directory is
+    # not applicable instead of raising AttributeError for os.statvfs.
+    if os.name == "nt":
+        return None, None, False
     try:
         value = X11_SOCKET_DIRECTORY.lstat()
     except FileNotFoundError:

@@ -1,17 +1,16 @@
 import { execFile } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 const execute = promisify(execFile);
-const bridgePath = new URL(
-  "../../../../bridge/hopper_bridge.py",
-  import.meta.url,
+const bridgePath = fileURLToPath(
+  new URL("../../../../bridge/hopper_bridge.py", import.meta.url),
 );
-const probePath = new URL(
-  "../../../fixtures/hopperBridgeFacadeProbe.py",
-  import.meta.url,
+const probePath = fileURLToPath(
+  new URL("../../../fixtures/hopperBridgeFacadeProbe.py", import.meta.url),
 );
 
 const probeResultSchema = z.strictObject({
@@ -96,15 +95,11 @@ const probeResultSchema = z.strictObject({
 
 describe("Hopper API facade", () => {
   it("imports without Hopper globals and gates exhaustive work during analysis", async () => {
-    const { stdout } = await execute(
-      "python3",
-      [probePath.pathname, bridgePath.pathname],
-      {
-        encoding: "utf8",
-        timeout: 3_000,
-        maxBuffer: 1_024 * 1_024,
-      },
-    );
+    const { stdout } = await execute("python3", [probePath, bridgePath], {
+      encoding: "utf8",
+      timeout: 3_000,
+      maxBuffer: 1_024 * 1_024,
+    });
     const result = probeResultSchema.parse(JSON.parse(stdout));
     expect(result.provider_faults.map((reply) => reply.error.message)).toEqual([
       "TypeError: Hopper bridge operation failed",

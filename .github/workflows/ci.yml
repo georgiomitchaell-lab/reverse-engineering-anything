@@ -347,6 +347,10 @@ jobs:
           src/process/ProcessOwnership.validation.test.ts
           tests/conformance/providers/ghidra/realGhidraWindowsWorkflow.test.ts
       - run: npm run verify:package:windows
+      - name: Run Windows PTY timeout and cancellation regressions
+        shell: pwsh
+        run: |
+          npm run test:windows-pty
       - uses: actions/upload-artifact@v4
         if: always()
         with:
