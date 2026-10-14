@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isAbsolute } from "node:path";
 import { isPathWithinRoot } from "./localPath.js";
 import canonicalize from "canonicalize";
 import { z } from "zod";
@@ -33,6 +34,10 @@ export const normalizationSchema = z.object({
 });
 const checkpointNameSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/u);
 const commandNameSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/u);
+const absolutePathSchema = z.string().refine(
+  (value) => value.startsWith("/") || isAbsolute(value),
+  "path must be absolute for the current platform",
+);
 const outputChunkSchema = z.object({
   at_ms: z.number().int().safe().nonnegative(),
   stream: z.enum(["stdout", "stderr"]),
@@ -114,14 +119,14 @@ export const processComparisonContract = (
  */
 export const processScenarioSchema = z
   .object({
-    executable: z.string().startsWith("/"),
+    executable: absolutePathSchema,
     arguments: z.array(z.string()).default([]),
-    working_directory: z.string().startsWith("/"),
+    working_directory: absolutePathSchema,
     environment: z.record(environmentName, z.string()).default({}),
     inherit_environment: z.array(environmentName).default([]),
     secret_aliases: z.array(environmentName).default([]),
     network_access: z.literal("host").default("host"),
-    filesystem_roots: z.array(z.string().startsWith("/")).default([]),
+    filesystem_roots: z.array(absolutePathSchema).default([]),
     terminal: z
       .object({
         columns: z.number().int().min(1).max(65_535).default(80),
