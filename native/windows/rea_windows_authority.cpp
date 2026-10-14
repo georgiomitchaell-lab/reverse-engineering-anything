@@ -37,7 +37,58 @@ static int fail(const wchar_t* where, DWORD e = GetLastError()) {
   return 1;
 }
 
+// Fail closed when an existing path component is a reparse point. Open each
+// component itself (not its target) before applying the private-runtime ACL.
+static bool pathHasReparseComponent(const wchar_t* input, DWORD* errorOut) {
+  DWORD needed = GetFullPathNameW(input, 0, nullptr, nullptr);
+  if (needed == 0) { *errorOut = GetLastError(); return true; }
+  std::vector<wchar_t> buffer(needed + 1);
+  DWORD length = GetFullPathNameW(input, static_cast<DWORD>(buffer.size()), buffer.data(), nullptr);
+  if (length == 0 || length >= buffer.size()) {
+    *errorOut = length == 0 ? GetLastError() : ERROR_FILENAME_EXCED_RANGE;
+    return true;
+  }
+  std::wstring full(buffer.data(), length);
+  if (full.size() < 3 || full[1] != L':' || (full[2] != L'\\' && full[2] != L'/')) {
+    *errorOut = ERROR_INVALID_NAME;
+    return true;
+  }
+  for (size_t i = 3; i <= full.size(); ++i) {
+    if (i < full.size() && full[i] != L'\\' && full[i] != L'/') continue;
+    if (i == 3) continue;
+    std::wstring component = full.substr(0, i);
+    DWORD attrs = GetFileAttributesW(component.c_str());
+    if (attrs == INVALID_FILE_ATTRIBUTES) {
+      DWORD error = GetLastError();
+      if (i == full.size() && (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND)) {
+        *errorOut = ERROR_SUCCESS;
+        return false;
+      }
+      *errorOut = error;
+      return true;
+    }
+    HANDLE handle = CreateFileW(component.c_str(), FILE_READ_ATTRIBUTES,
+      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+      FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) { *errorOut = GetLastError(); return true; }
+    FILE_ATTRIBUTE_TAG_INFO info{};
+    BOOL ok = GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &info, sizeof(info));
+    DWORD error = ok ? ERROR_SUCCESS : GetLastError();
+    CloseHandle(handle);
+    if (!ok) { *errorOut = error; return true; }
+    if ((info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+      *errorOut = ERROR_CANT_ACCESS_FILE;
+      return true;
+    }
+  }
+  *errorOut = ERROR_SUCCESS;
+  return false;
+}
+
 static int createPrivateDir(const wchar_t* path) {
+  DWORD pathError = ERROR_SUCCESS;
+  if (pathHasReparseComponent(path, &pathError))
+    return fail(L"reparse_path_admission", pathError);
   PSECURITY_DESCRIPTOR sd = nullptr;
   // Protected DACL: SYSTEM and the directory owner only; inheritable to children.
   if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
