@@ -120,4 +120,3 @@ await access(output);
 process.stdout.write(
   "Set REA_WINDOWS_AUTHORITY_PATH to this executable to enable Job Object launches.\\n",
 );
-process.stdout.write("Set REA_WINDOWS_AUTHORITY_PATH to this executable to enable Job Object launches.\n");
