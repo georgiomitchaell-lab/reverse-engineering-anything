@@ -53,6 +53,19 @@ import { PROCESS_PROVIDER } from "./ProcessEvidence.js";
 import { TerminalRenderer } from "./TerminalRenderer.js";
 import { scheduleProcessInterval, type ProcessTimer } from "./ProcessTimer.js";
 
+/**
+ * node-pty's Windows backend rejects POSIX signal arguments. For an owned
+ * PTY teardown, Windows requires the no-argument kill operation instead.
+ */
+export const terminateProcessTerminal = (
+  terminal: { kill: (signal?: string) => void },
+  signal: string,
+  platform: NodeJS.Platform = process.platform,
+): void => {
+  if (platform === "win32") terminal.kill();
+  else terminal.kill(signal);
+};
+
 interface TerminalExitOptions {
   readonly terminal: IPty;
   readonly scenario: ProcessScenario;
@@ -294,13 +307,13 @@ export const awaitTerminalExit = async ({
     const timeout = scheduleProcessInterval(() => {
       if (signal?.aborted === true) {
         reason = "cancelled";
-        terminal.kill("SIGKILL");
+        terminateProcessTerminal(terminal, "SIGKILL");
       } else if (Date.now() - started >= scenario.timeout_ms) {
         reason = "timeout";
-        terminal.kill("SIGKILL");
+        terminateProcessTerminal(terminal, "SIGKILL");
       } else if (Date.now() - lastOutput() >= scenario.idle_timeout_ms) {
         reason = "idle_timeout";
-        terminal.kill("SIGKILL");
+        terminateProcessTerminal(terminal, "SIGKILL");
       }
     }, 20);
     timers.add(timeout);
