@@ -75,8 +75,6 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - name: Print Prettier-formatted catalog serializer for diagnosis
-        run: npx prettier scripts/lib/product-catalog.mjs
       - if: github.event_name == 'push' || needs.changes.outputs.code == 'true'
         run: npm run check:ci
       - if: github.event_name == 'pull_request' && needs.changes.outputs.code != 'true'
