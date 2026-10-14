@@ -8,13 +8,16 @@ The `run-job` command requires the supervisor PID and monitors that process.
 If the supervisor exits, the helper terminates the entire Job Object. Its stdout
 is reserved for the provider protocol; helper diagnostics go to stderr.
 
-The private-directory creation path now performs a fail-closed preflight that
-rejects existing reparse-point path components and unsupported non-drive paths.
-This is defense in depth only: path-based preflight followed by path-based
-creation has a time-of-check/time-of-use race and is **not** a complete
-reparse-safe admission guarantee.
+Private-directory admission uses handle-relative NT file operations. Each
+existing parent component is opened relative to the previously validated
+directory handle with `FILE_OPEN_REPARSE_POINT`, then rejected if the handle
+identifies a reparse point or a non-directory. The final directory is created
+relative to that held parent handle with `FILE_CREATE` (never open-or-create),
+and its protected DACL is verified through the returned handle rather than by
+reopening the path. This avoids the former path-based check/use traversal race.
 
-The helper deliberately does not claim reparse-safe path admission. Production
-capability must remain unavailable until directory traversal and creation are
-performed relative to validated directory handles with no-reparse semantics,
-and Windows tests prove junction/symlink rejection including race-safe behavior.
+The packaged Windows verifier now checks the success marker and creates a
+junction fixture to assert that a path through a reparse-point parent fails
+closed. Windows native capability reporting remains unavailable until this
+updated native helper is built and the packaged verifier succeeds on Windows;
+the source change alone is not runtime proof.
