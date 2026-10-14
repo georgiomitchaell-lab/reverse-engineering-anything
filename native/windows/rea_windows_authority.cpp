@@ -107,23 +107,37 @@ static int createPrivateDir(const wchar_t* path) {
 }
 
 static int runInJob(int argc, wchar_t** argv) {
-  if (argc < 4 || wcscmp(argv[2], L"--") != 0) {
-    std::wcerr << L"Usage: rea_windows_authority.exe run-job -- <exe> [args...]\n";
+  if (argc < 6 || wcscmp(argv[2], L"--parent-pid") != 0 ||
+      wcscmp(argv[4], L"--") != 0) {
+    std::wcerr << L"Usage: rea_windows_authority.exe run-job --parent-pid <pid> -- <exe> [args...]\n";
     return 2;
   }
+  wchar_t* pidEnd = nullptr;
+  unsigned long parentPid = wcstoul(argv[3], &pidEnd, 10);
+  if (parentPid == 0 || pidEnd == argv[3] || *pidEnd != L'\0')
+    return fail(L"invalid_parent_pid", ERROR_INVALID_PARAMETER);
+  HANDLE parentProcess = OpenProcess(SYNCHRONIZE, FALSE, parentPid);
+  if (!parentProcess) return fail(L"open_parent_process");
+
   std::wstring command;
-  for (int i = 3; i < argc; ++i) {
+  for (int i = 5; i < argc; ++i) {
     if (!command.empty()) command.push_back(L' ');
     command += quoteArg(argv[i]);
   }
 
   HANDLE job = CreateJobObjectW(nullptr, nullptr);
-  if (!job) return fail(L"create_job");
+  if (!job) {
+    DWORD e = GetLastError();
+    CloseHandle(parentProcess);
+    return fail(L"create_job", e);
+  }
   JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
   limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
   if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation,
       &limits, sizeof(limits))) {
-    DWORD e = GetLastError(); CloseHandle(job); return fail(L"configure_job", e);
+    DWORD e = GetLastError();
+    CloseHandle(job); CloseHandle(parentProcess);
+    return fail(L"configure_job", e);
   }
 
   STARTUPINFOW si{};
@@ -139,13 +153,16 @@ static int runInJob(int argc, wchar_t** argv) {
   // Crucial ordering: create suspended -> assign to Job Object -> resume.
   if (!CreateProcessW(argv[3], mutableCommand.data(), nullptr, nullptr, TRUE,
       CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT, nullptr, nullptr, &si, &pi)) {
-    DWORD e = GetLastError(); CloseHandle(job); return fail(L"create_suspended", e);
+    DWORD e = GetLastError();
+    CloseHandle(job); CloseHandle(parentProcess);
+    return fail(L"create_suspended", e);
   }
   if (!AssignProcessToJobObject(job, pi.hProcess)) {
     DWORD e = GetLastError();
     TerminateProcess(pi.hProcess, 125);
     WaitForSingleObject(pi.hProcess, 5000);
     CloseHandle(pi.hThread); CloseHandle(pi.hProcess); CloseHandle(job);
+    CloseHandle(parentProcess);
     return fail(L"assign_job", e);
   }
   if (ResumeThread(pi.hThread) == static_cast<DWORD>(-1)) {
@@ -153,16 +170,34 @@ static int runInJob(int argc, wchar_t** argv) {
     TerminateJobObject(job, 125);
     WaitForSingleObject(pi.hProcess, 5000);
     CloseHandle(pi.hThread); CloseHandle(pi.hProcess); CloseHandle(job);
+    CloseHandle(parentProcess);
     return fail(L"resume_child", e);
   }
   CloseHandle(pi.hThread);
-  WaitForSingleObject(pi.hProcess, INFINITE);
+  HANDLE waits[2] = { pi.hProcess, parentProcess };
+  DWORD waitResult = WaitForMultipleObjects(2, waits, FALSE, INFINITE);
+  if (waitResult == WAIT_OBJECT_0 + 1) {
+    // If the supervising Node process disappears, tear down the entire job.
+    TerminateJobObject(job, 125);
+    WaitForSingleObject(pi.hProcess, 5000);
+    CloseHandle(pi.hProcess); CloseHandle(parentProcess); CloseHandle(job);
+    return 125;
+  }
+  if (waitResult != WAIT_OBJECT_0) {
+    DWORD e = GetLastError();
+    TerminateJobObject(job, 125);
+    WaitForSingleObject(pi.hProcess, 5000);
+    CloseHandle(pi.hProcess); CloseHandle(parentProcess); CloseHandle(job);
+    return fail(L"wait_for_child_or_parent", e);
+  }
   DWORD exitCode = 1;
   if (!GetExitCodeProcess(pi.hProcess, &exitCode)) {
     DWORD e = GetLastError();
-    CloseHandle(pi.hProcess); CloseHandle(job); return fail(L"read_exit_code", e);
+    CloseHandle(pi.hProcess); CloseHandle(parentProcess); CloseHandle(job);
+    return fail(L"read_exit_code", e);
   }
   CloseHandle(pi.hProcess);
+  CloseHandle(parentProcess);
   // Closing the job enforces KILL_ON_JOB_CLOSE for any remaining descendants.
   // Do not write status JSON to stdout: it is the provider's protocol stream.
   CloseHandle(job);
@@ -175,6 +210,6 @@ int wmain(int argc, wchar_t** argv) {
   if (argc >= 4 && wcscmp(argv[1], L"run-job") == 0)
     return runInJob(argc, argv);
   std::wcerr << L"Usage:\n  rea_windows_authority.exe create-private-dir <new-directory>\n"
-             << L"  rea_windows_authority.exe run-job -- <exe> [args...]\n";
+             << L"  rea_windows_authority.exe run-job --parent-pid <pid> -- <exe> [args...]\n";
   return 2;
 }
