@@ -75,6 +75,11 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - name: Diagnose Prettier output for Windows availability test
+        if: github.event_name == 'push' || needs.changes.outputs.code == 'true'
+        run: |
+          npx prettier src/ghidra/GhidraProvider.behavior.test.ts > "$RUNNER_TEMP/GhidraProvider.behavior.formatted.ts"
+          diff -u src/ghidra/GhidraProvider.behavior.test.ts "$RUNNER_TEMP/GhidraProvider.behavior.formatted.ts" || true
       - if: github.event_name == 'push' || needs.changes.outputs.code == 'true'
         run: npm run check:ci
       - if: github.event_name == 'pull_request' && needs.changes.outputs.code != 'true'
