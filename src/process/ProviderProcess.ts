@@ -116,7 +116,7 @@ export const spawnOwnedProviderProcess = async (
     typeof nativeAuthorityPath === "string" && nativeAuthorityPath.trim().length > 0;
   const launchCommand = useWindowsJob ? nativeAuthorityPath! : options.command;
   const launchArguments = useWindowsJob
-    ? ["run-job", "--", options.command, ...options.arguments]
+    ? ["run-job", "--parent-pid", String(process.pid), "--", options.command, ...options.arguments]
     : [...options.arguments];
 
   const child = spawn(launchCommand, launchArguments, {
