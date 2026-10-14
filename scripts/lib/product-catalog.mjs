@@ -1,5 +1,3 @@
-
-
 import { assertSameNames, digest, loadSources } from "./catalog-core.mjs";
 import {
   createCliInventory,
