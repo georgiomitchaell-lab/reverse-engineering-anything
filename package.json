@@ -156,7 +156,8 @@
     "prepack": "node scripts/prepack.mjs",
     "prepare": "node scripts/prepare.mjs",
     "verify:asset-catalog": "npm run build:cached && node scripts/verify-asset-catalog.mjs",
-    "verify:native-ui:permissions": "npm run build:cached && node scripts/verify-native-ui.mjs --allow-permission-denial"
+    "verify:native-ui:permissions": "npm run build:cached && node scripts/verify-native-ui.mjs --allow-permission-denial",
+    "build:windows-native": "node scripts/build-windows-authority.mjs"
   },
   "lint-staged": {
     "*.{cjs,cts,js,jsx,mjs,mts,ts,tsx}": [
