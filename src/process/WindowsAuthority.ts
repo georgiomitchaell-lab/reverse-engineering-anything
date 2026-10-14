@@ -24,7 +24,7 @@ export interface WindowsNativeCapabilitySet {
 
 /** Stable explanation used whenever the native Windows authority is absent. */
 export const WINDOWS_NATIVE_AUTHORITY_UNAVAILABLE_REASON =
-  "Complete Windows isolation is not proven: the native helper now provides Job Object ownership and protected private-runtime DACL creation, but reparse-safe path admission is still unimplemented; chmod(0700) and taskkill do not establish those native guarantees";
+  "Complete Windows isolation is not proven: the helper implements handle-relative no-reparse directory admission and protected DACL verification, but the required Windows package and adversarial tests have not yet been executed; chmod(0700) and taskkill do not establish those native guarantees";
 
 /**
  * Describe native Windows controls without inferring them from taskkill,
