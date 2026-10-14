@@ -158,7 +158,13 @@ const unavailableLineage = (run, observedAt, processGroupId, reason) => ({
 const windowsJobSnapshot = async (jobName) => {
   const helperPath =
     process.env.REA_WINDOWS_AUTHORITY_PATH?.trim() ||
-    join(process.cwd(), "dist", "native", "windows", "rea_windows_authority.exe");
+    join(
+      process.cwd(),
+      "dist",
+      "native",
+      "windows",
+      "rea_windows_authority.exe",
+    );
   const child = spawn(helperPath, ["list-job-pids", "--job-name", jobName], {
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
@@ -182,7 +188,9 @@ const windowsJobSnapshot = async (jobName) => {
     report?.operation !== "list-job-pids" ||
     !Array.isArray(report.processes)
   )
-    throw new Error("native helper returned an invalid Job Object membership report");
+    throw new Error(
+      "native helper returned an invalid Job Object membership report",
+    );
   const members = report.processes.map((member) => {
     if (
       !Number.isSafeInteger(member?.pid) ||
