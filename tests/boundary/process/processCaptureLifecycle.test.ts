@@ -3,7 +3,7 @@ import { rm, symlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { createTestTempDirectory } from "../../fixtures/temporaryDirectory.js";
 import { itWithCaptureCapability } from "./processCaptureCapability.js";
 
@@ -11,6 +11,7 @@ import {
   captureProcessScenario,
   ProcessCaptureError,
 } from "../../../src/application/ProcessHarness.js";
+import { terminateProcessTerminal } from "../../../src/application/ProcessCaptureLifecycle.js";
 import {
   parseProcessScenario,
   type ProcessExecutionPolicy,
@@ -20,6 +21,19 @@ const processFixture = fileURLToPath(
   new URL("../../fixtures/processFidelity.mjs", import.meta.url),
 );
 const execFileAsync = promisify(execFile);
+
+it("terminates a Windows PTY without passing an unsupported POSIX signal", () => {
+  const kill = vi.fn();
+  terminateProcessTerminal({ kill }, "SIGKILL", "win32");
+  expect(kill).toHaveBeenCalledOnce();
+  expect(kill).toHaveBeenCalledWith();
+});
+
+it("preserves the requested signal on POSIX", () => {
+  const kill = vi.fn();
+  terminateProcessTerminal({ kill }, "SIGTERM", "linux");
+  expect(kill).toHaveBeenCalledWith("SIGTERM");
+});
 
 itWithCaptureCapability(
   "does not follow or disclose symlink targets outside declared roots",
