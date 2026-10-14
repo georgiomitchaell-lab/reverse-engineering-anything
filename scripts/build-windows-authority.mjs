@@ -20,24 +20,70 @@ try {
   throw new Error(`Native helper source not found: ${source}`);
 }
 
-const result = spawnSync(
-  "cl.exe",
-  [
-    "/nologo",
-    "/std:c++17",
-    "/EHsc",
-    "/W4",
-    source,
-    `/Fo${outputDirectory}\\`,
-    `/Fe:${output}`,
-    "/link",
-    "advapi32.lib",
-  ],
-  { cwd: root, encoding: "utf8", stdio: "inherit", windowsHide: true },
-);
+const compilerArgs = [
+  "/nologo",
+  "/std:c++17",
+  "/EHsc",
+  "/W4",
+  source,
+  `/Fo${outputDirectory}\\`,
+  `/Fe:${output}`,
+  "/link",
+  "advapi32.lib",
+];
+
+// Support ordinary PowerShell as well as Visual Studio Developer PowerShell.
+// cl.exe alone is insufficient: INCLUDE/LIB and the linker environment must be
+// initialized by VsDevCmd.bat. Honor an already initialized developer shell.
+let result;
+if (process.env.VCToolsInstallDir && process.env.WindowsSdkDir) {
+  result = spawnSync("cl.exe", compilerArgs, {
+    cwd: root,
+    encoding: "utf8",
+    stdio: "inherit",
+    windowsHide: true,
+  });
+} else {
+  const vswhere = join(
+    process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)",
+    "Microsoft Visual Studio",
+    "Installer",
+    "vswhere.exe",
+  );
+  let installationPath;
+  try {
+    const found = spawnSync(
+      vswhere,
+      ["-latest", "-products", "*", "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath"],
+      { cwd: root, encoding: "utf8", windowsHide: true },
+    );
+    if (found.status === 0) installationPath = found.stdout.trim();
+  } catch {
+    // Report a single actionable error below.
+  }
+  if (!installationPath) {
+    throw new Error(
+      "Visual Studio C++ Build Tools were not found. Install the 'Desktop development with C++' workload or run this command from x64 Native Tools/Developer PowerShell.",
+    );
+  }
+
+  const developerCommand = join(installationPath, "Common7", "Tools", "VsDevCmd.bat");
+  const quote = (value) => `"${String(value).replaceAll('"', '""')}"`;
+  const command = [
+    `call ${quote(developerCommand)} -no_logo -arch=x64 -host_arch=x64`,
+    "&&",
+    "cl.exe",
+    ...compilerArgs.map(quote),
+  ].join(" ");
+  result = spawnSync(
+    process.env.ComSpec ?? "cmd.exe",
+    ["/d", "/s", "/c", `"${command}"`],
+    { cwd: root, encoding: "utf8", stdio: "inherit", windowsHide: true },
+  );
+}
 if (result.error) throw result.error;
 if (result.status !== 0) {
-  throw new Error(`cl.exe failed to build native authority helper (exit ${result.status}).`);
+  throw new Error(`Windows native authority build failed (exit ${result.status}).`);
 }
 await access(output);
 process.stdout.write(`Windows native helper built: ${output}\n`);
